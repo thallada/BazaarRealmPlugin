@@ -1,0 +1,3 @@
+#pragma once
+
+int CreateOwner(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BSFixedString name, uint32_t mod_version);
