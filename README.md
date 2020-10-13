@@ -8,6 +8,8 @@ Related projects:
   for the mod that stores all shop data
 * [`BazaarRealmClient`](https://github.com/thallada/BazaarRealmClient): DLL that
   handles requests and responses to the API
+* [`BazaarRealmMod`](https://github.com/thallada/BazaarRealmMod): Papyrus
+  scripts, ESP plugin, and all other resources for the mod
 
 ## Building
 
