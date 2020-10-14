@@ -178,7 +178,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(BazaarRealmClientPath)\target\debug\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>ShopkeeperClient.dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>BazaarRealmClient.dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(TargetPath)" "$(Skyrim64Path)\Data\SKSE\Plugins\$(TargetFileName)" /Y</Command>
@@ -210,7 +210,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(BazaarRealmClientPath)\target\debug\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>ShopkeeperClient.dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>BazaarRealmClient.dll.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy "$(TargetPath)" "$(Skyrim64Path)\Data\SKSE\Plugins\$(TargetFileName)" /Y</Command>

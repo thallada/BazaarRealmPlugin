@@ -96,6 +96,7 @@ bool LoadMerchandiseImpl(
 	using func_t2 = decltype(&MoveTo);
 	REL::Relocation<func_t2> MoveTo_Native(RE::Offset::TESObjectREFR::MoveTo);
 	REL::ID extra_linked_ref_vtbl(static_cast<std::uint64_t>(229564));
+
 	if (!merchant_shelf) {
 		logger::error("LoadMerchandise merchant_shelf is null!");
 		return false;
@@ -106,6 +107,16 @@ bool LoadMerchandiseImpl(
 		return false;
 	}
 
+	RE::TESObjectREFR * toggle_ref = merchant_shelf->GetLinkedRef(toggle_keyword);
+	if (!toggle_ref) {
+		logger::error("LoadMerchandise toggle_ref is null!");
+		return false;
+	}
+
+	// Since this method is running asyncronously in a thread, set up a callback on the trigger ref that will receive an event with the result
+	SKSE::RegistrationMap<bool> regMap = SKSE::RegistrationMap<bool>();
+	regMap.Register(toggle_ref, RE::BSFixedString("OnLoadMerchandise"));
+
 	FFIResult<MerchRecordVec> result = get_merchandise_list(api_url.c_str(), api_key.c_str(), merchandise_list_id);
 	if (result.IsOk()) {
 		logger::info("LoadMerchandise get_merchandise_list result OK");
@@ -115,6 +126,7 @@ bool LoadMerchandiseImpl(
 
 		if (vec.len > 0 && page > max_page) {
 			logger::info(FMT_STRING("LoadMerchandise page {:d} is greater than max_page {:d}, doing nothing"), page, max_page);
+			regMap.SendEvent(true);
 			return true;
 		}
 
@@ -321,19 +333,16 @@ bool LoadMerchandiseImpl(
 		}
 		logger::info(FMT_STRING("LoadMerchandise set loaded: {:d}"), merchant_shelf->extraList.GetByType<RE::ExtraCannotWear>() != nullptr);
 
-		RE::TESObjectREFR * toggle_ref = merchant_shelf->GetLinkedRef(toggle_keyword);
-		if (!toggle_ref) {
-			logger::error("LoadMerchandise toggle_ref is null!");
-			return false;
-		}
 		RE::TESObjectREFR * next_ref = merchant_shelf->GetLinkedRef(next_keyword);
 		if (!next_ref) {
 			logger::error("LoadMerchandise next_ref is null!");
+			regMap.SendEvent(false);
 			return false;
 		}
 		RE::TESObjectREFR * prev_ref = merchant_shelf->GetLinkedRef(prev_keyword);
 		if (!prev_ref) {
 			logger::error("LoadMerchandise prev_ref is null!");
+			regMap.SendEvent(false);
 			return false;
 		}
 		toggle_ref->SetDisplayName("Clear merchandise", true);
@@ -349,13 +358,19 @@ bool LoadMerchandiseImpl(
 		else {
 			prev_ref->SetDisplayName(fmt::format("Back to page %d", page - 1).c_str(), true);
 		}
+		// auto messaging = SKSE::GetModCallbackEventSource();
+		// const SKSE::ModCallbackEvent event = { RE::BSFixedString("BazaarRealm_LoadMerchandiseDone"), RE::BSFixedString(""), 0, nullptr };
+		// messaging->SendEvent(&event);
+		// a_vm->SendEventAll(RE::BSFixedString("BazaarRealm_LoadMerchandiseDone"), RE::MakeFunctionArguments());
 	}
 	else {
 		const char * error = result.AsErr();
 		logger::error(FMT_STRING("LoadMerchandise get_merchandise_list error: {}"), error);
+		regMap.SendEvent(false);
 		return false;
 	}
 	
+	regMap.SendEvent(true);
 	return true;
 }
 
@@ -415,7 +430,9 @@ bool ToggleMerchandise(
 	else {
 		// Load merchandise
 		int page = merchant_shelf->extraList.GetCount();
-		return LoadMerchandiseImpl(api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+		std::thread t(LoadMerchandiseImpl, api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+		t.detach();
+		return true;
 	}
 }
 
