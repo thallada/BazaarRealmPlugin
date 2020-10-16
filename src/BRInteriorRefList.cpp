@@ -2,11 +2,26 @@
 
 #include "NativeFunctions.h"
 
-int CreateInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectCELL * cell)
+int CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESQuest* quest)
 {	
-	logger::info("Entered CreateInteriorRefList");
-	if (!cell)
+	logger::info("Entered CreateInteriorRefListImpl");
+
+	if (!quest) {
+		logger::error("LoadInteriorRefList quest is null!");
 		return -1;
+	}
+
+	SKSE::RegistrationMap<int> regMap = SKSE::RegistrationMap<int>();
+	regMap.Register(quest, RE::BSFixedString("OnCreateInteriorRefList"));
+
+	RE::TESObjectCELL * cell = RE::TESObjectCELL::LookupByEditorID<RE::TESObjectCELL>("BREmpty");
+	logger::info(FMT_STRING("ClearCell lookup cell override name: {} id: {:x}"), cell->GetName(), (uint32_t)cell->GetFormID());
+	if (!cell) {
+		logger::error("ClearCell cell is null!");
+		regMap.SendEvent(-1);
+		regMap.Unregister(quest);
+		return -1;
+	}
 
 	RE::TESDataHandler * data_handler = RE::TESDataHandler::GetSingleton();
 	std::vector<RefRecord> ref_records;
@@ -84,10 +99,25 @@ int CreateInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE:
 
 	int interior_ref_list_id = create_interior_ref_list(api_url.c_str(), api_key.c_str(), shop_id, &ref_records[0], ref_records.size());
 	logger::info(FMT_STRING("CreateInteriorRefList result: {}"), interior_ref_list_id);
+	regMap.SendEvent(interior_ref_list_id);
+	regMap.Unregister(quest);
 	return interior_ref_list_id;
 }
 
-bool ClearCell(RE::StaticFunctionTag*, RE::TESObjectCELL* cell_ignored)
+bool CreateInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESQuest* quest) {
+	logger::info("Entered CreateInteriorRefList");
+
+	if (!quest) {
+		logger::error("LoadInteriorRefList quest is null!");
+		return false;
+	}
+
+	std::thread thread(CreateInteriorRefListImpl, api_url, api_key, shop_id, quest);
+	thread.detach();
+	return true;
+}
+
+bool ClearCell(RE::StaticFunctionTag*)
 {
 	logger::info("Entered ClearCell");
 
@@ -171,9 +201,17 @@ bool ClearCell(RE::StaticFunctionTag*, RE::TESObjectCELL* cell_ignored)
 // Should split this up into GetInteriorRefList and LoadInteriorRefList.
 // Get: makes the request to the api and stores the Result in a rust cache, returns id of Result
 // Load: given id of interior ref list, gets the data from the rust cache, does the PlaceAtMe loop and returns an id of another Result
-bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t interior_ref_list_id, RE::TESObjectCELL* cell_ignored, RE::TESObjectREFR* target_ref)
+bool LoadInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t interior_ref_list_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest)
 {
-	logger::info("Entered LoadInteriorRefList");
+	logger::info("Entered LoadInteriorRefListImpl");
+
+	if (!quest) {
+		logger::error("LoadInteriorRefList quest is null!");
+		return false;
+	}
+
+	SKSE::RegistrationMap<bool> regMap = SKSE::RegistrationMap<bool>();
+	regMap.Register(quest, RE::BSFixedString("OnLoadInteriorRefList"));
 	
 	RE::TESDataHandler * data_handler = RE::TESDataHandler::GetSingleton();
 	RE::BSScript::Internal::VirtualMachine * a_vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
@@ -196,6 +234,9 @@ bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::
 	logger::info(FMT_STRING("LoadInteriorRefList lookup cell override name: {} id: {:x}"), cell->GetName(), (uint32_t)cell->GetFormID());
 	if (!cell) {
 		logger::error("LoadInteriorRefList cell is null!");
+		regMap.SendEvent(false);
+		regMap.Unregister(quest);
+		return false;
 	}
 
 	//RE::TESObjectREFR * x_marker = data_handler->LookupForm<RE::TESObjectREFR>(6628, "BazaarRealm.esp");
@@ -248,21 +289,33 @@ bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::
 					}
 					logger::info(FMT_STRING("LoadInteriorRefList lookup form name: {}, form_id: {:x}"), form->GetName(), (uint32_t)form->GetFormID());
 					game_ref = PlaceAtMe_Native(a_vm, 0, target_ref, form, 1, false, false);
+					if (!game_ref) {
+						logger::error("LoadInteriorRefList failed to place new ref in cell!");
+						regMap.SendEvent(false);
+						regMap.Unregister(quest);
+						return false;
+					}
 				}
 
-				MoveTo_Native(game_ref, game_ref->CreateRefHandle(), cell, cell->worldSpace, position, angle);
+				RE::ObjectRefHandle handle = game_ref->CreateRefHandle();
+				logger::info(FMT_STRING("LoadInteriorRefList ref handle: {:x}, game_ref: {:x}"), (uint32_t)handle.get().get(), (uint32_t)game_ref);
+				MoveTo_Native(game_ref, handle, cell, cell->worldSpace, position, angle);
 				game_ref->data.angle = angle; // set angle directly to fix bug with MoveTo in an unloaded target cell
 			}
 		}
 		else {
 			const char * error = result.AsErr();
 			logger::error(FMT_STRING("LoadInteriorRefList get_interior_ref_list error: {}"), error);
+			regMap.SendEvent(false);
+			regMap.Unregister(quest);
 			return false;
 		}
 		
 	}
 	else {
 		logger::error("LoadInteriorRefList target_ref is null!");
+		regMap.SendEvent(false);
+		regMap.Unregister(quest);
 		return false;
 	}
 	
@@ -274,5 +327,26 @@ bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::
 	//RE::TESObjectREFR * new_ref = func(RE::BSScript::Internal::VirtualMachine::GetSingleton(), 1, player, gold, 50, false, false);
 	//_MESSAGE("New ref initially disabled: %d", new_ref->IsDisabled());
 	//_MESSAGE("New ref persistent: %d", new_ref->loadedData->flags & RE::TESObjectREFR::RecordFlags::kPersistent);
+	regMap.SendEvent(true);
+	regMap.Unregister(quest);
+	return true;
+}
+
+bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t interior_ref_list_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
+	logger::info("Entered LoadInteriorRefList");
+
+	if (!target_ref) {
+		logger::error("LoadInteriorRefList target_ref is null!");
+		return false;
+	}
+	if (!quest) {
+		logger::error("LoadInteriorRefList quest is null!");
+		return false;
+	}
+
+	LoadInteriorRefListImpl(api_url, api_key, interior_ref_list_id, target_ref, quest);
+	// TODO: making this async causes a crash
+	// std::thread thread(LoadInteriorRefListImpl, api_url, api_key, interior_ref_list_id, target_ref, quest);
+	// thread.detach();
 	return true;
 }

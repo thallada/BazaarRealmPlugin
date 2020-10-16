@@ -5,7 +5,7 @@
 // TODO: replace "placeholder" with "buy_activator" and "ref" with "item_ref"
 bool ClearMerchandiseImpl(RE::TESObjectREFR* merchant_chest, RE::TESObjectREFR* merchant_shelf, RE::TESForm* placeholder_static, RE::BGSKeyword * shelf_keyword, RE::BGSKeyword * item_keyword)
 {
-	logger::info("Entered ClearMerchandise");
+	logger::info("Entered ClearMerchandiseImpl");
 
 	if (merchant_chest && merchant_shelf) {
 		RE::TESObjectCELL * cell = merchant_shelf->GetParentCell();
@@ -86,7 +86,7 @@ bool LoadMerchandiseImpl(
 	RE::BGSKeyword* prev_keyword,
 	int page)
 {
-	logger::info("Entered LoadMerchandise");
+	logger::info("Entered LoadMerchandiseImpl");
 	logger::info(FMT_STRING("LoadMerchandise page: {:d}"), page);
 	
 	RE::TESDataHandler * data_handler = RE::TESDataHandler::GetSingleton();
@@ -101,11 +101,7 @@ bool LoadMerchandiseImpl(
 		logger::error("LoadMerchandise merchant_shelf is null!");
 		return false;
 	}
-	RE::TESObjectREFR * merchant_chest = merchant_shelf->GetLinkedRef(chest_keyword);
-	if (!merchant_chest) {
-		logger::error("LoadMerchandise merchant_chest is null!");
-		return false;
-	}
+	RE::TESObjectCELL * cell = merchant_shelf->GetParentCell();
 
 	RE::TESObjectREFR * toggle_ref = merchant_shelf->GetLinkedRef(toggle_keyword);
 	if (!toggle_ref) {
@@ -117,6 +113,14 @@ bool LoadMerchandiseImpl(
 	SKSE::RegistrationMap<bool> regMap = SKSE::RegistrationMap<bool>();
 	regMap.Register(toggle_ref, RE::BSFixedString("OnLoadMerchandise"));
 
+	RE::TESObjectREFR * merchant_chest = merchant_shelf->GetLinkedRef(chest_keyword);
+	if (!merchant_chest) {
+		logger::error("LoadMerchandise merchant_chest is null!");
+		regMap.SendEvent(false);
+		regMap.Unregister(toggle_ref);
+		return false;
+	}
+
 	FFIResult<MerchRecordVec> result = get_merchandise_list(api_url.c_str(), api_key.c_str(), merchandise_list_id);
 	if (result.IsOk()) {
 		logger::info("LoadMerchandise get_merchandise_list result OK");
@@ -127,6 +131,7 @@ bool LoadMerchandiseImpl(
 		if (vec.len > 0 && page > max_page) {
 			logger::info(FMT_STRING("LoadMerchandise page {:d} is greater than max_page {:d}, doing nothing"), page, max_page);
 			regMap.SendEvent(true);
+			regMap.Unregister(toggle_ref);
 			return true;
 		}
 
@@ -230,7 +235,6 @@ bool LoadMerchandiseImpl(
 			else if (i % 9 == 8) {
 				ref_position = RE::NiPoint3(shelf_position.x - 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
 			}
-			RE::TESObjectCELL * cell = merchant_shelf->GetParentCell();
 			MoveTo_Native(ref, ref->CreateRefHandle(), cell, cell->worldSpace, ref_position - RE::NiPoint3(10000, 10000, 10000), ref_angle);
 			MoveTo_Native(placeholder_ref, placeholder_ref->CreateRefHandle(), cell, cell->worldSpace, ref_position, ref_angle);
 			// ref->Load3D(false);
@@ -337,12 +341,14 @@ bool LoadMerchandiseImpl(
 		if (!next_ref) {
 			logger::error("LoadMerchandise next_ref is null!");
 			regMap.SendEvent(false);
+			regMap.Unregister(toggle_ref);
 			return false;
 		}
 		RE::TESObjectREFR * prev_ref = merchant_shelf->GetLinkedRef(prev_keyword);
 		if (!prev_ref) {
 			logger::error("LoadMerchandise prev_ref is null!");
 			regMap.SendEvent(false);
+			regMap.Unregister(toggle_ref);
 			return false;
 		}
 		toggle_ref->SetDisplayName("Clear merchandise", true);
@@ -367,10 +373,12 @@ bool LoadMerchandiseImpl(
 		const char * error = result.AsErr();
 		logger::error(FMT_STRING("LoadMerchandise get_merchandise_list error: {}"), error);
 		regMap.SendEvent(false);
+		regMap.Unregister(toggle_ref);
 		return false;
 	}
 	
 	regMap.SendEvent(true);
+	regMap.Unregister(toggle_ref);
 	return true;
 }
 
@@ -430,8 +438,8 @@ bool ToggleMerchandise(
 	else {
 		// Load merchandise
 		int page = merchant_shelf->extraList.GetCount();
-		std::thread t(LoadMerchandiseImpl, api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
-		t.detach();
+		std::thread thread(LoadMerchandiseImpl, api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+		thread.detach();
 		return true;
 	}
 }
@@ -462,7 +470,9 @@ bool LoadNextMerchandise(
 		page = page + 1;
 	}
 
-	return LoadMerchandiseImpl(api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+	std::thread thread(LoadMerchandiseImpl, api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+	thread.detach();
+	return true;
 }
 
 bool LoadPrevMerchandise(
@@ -495,7 +505,9 @@ bool LoadPrevMerchandise(
 		page = page - 1;
 	}
 	
-	return LoadMerchandiseImpl(api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+	std::thread thread(LoadMerchandiseImpl, api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+	thread.detach();
+	return true;
 }
 
 bool ReplaceMerch3D(RE::StaticFunctionTag*, RE::TESObjectREFR* merchant_shelf, RE::TESForm* placeholder_static, RE::BGSKeyword* shelf_keyword, RE::BGSKeyword* item_keyword) {
@@ -554,19 +566,25 @@ RE::TESForm * BuyMerchandise(RE::StaticFunctionTag*, RE::TESObjectREFR * merchan
 // -2: No changes to save, no create request was made
 // -1: Error occured
 // >= 0: ID of created MerchandiseList returned by API
-int CreateMerchandiseList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* merchant_chest)
+int CreateMerchandiseListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* merchant_chest)
 {	
-	logger::info("Entered CreateMerchandiseList");
+	logger::info("Entered CreateMerchandiseListImpl");
 	RE::TESDataHandler * data_handler = RE::TESDataHandler::GetSingleton();
 	std::vector<MerchRecord> merch_records;
+
 	if (!merchant_chest) {
 		logger::error("CreateMerchandiseList merchant_chest is null!");
 		return -1;
 	}
 
+	SKSE::RegistrationMap<int> regMap = SKSE::RegistrationMap<int>();
+	regMap.Register(merchant_chest, RE::BSFixedString("OnCreateMerchandise"));
+
 	RE::InventoryChanges * inventory_changes = merchant_chest->GetInventoryChanges();
 	if (inventory_changes == nullptr) {
 		logger::info("CreateMerchandiseList container empty, nothing to save");
+		regMap.SendEvent(-2);
+		regMap.Unregister(merchant_chest);
 		return -2;
 	}
 
@@ -637,5 +655,21 @@ int CreateMerchandiseList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE:
 
 	int merchandise_list_id = create_merchandise_list(api_url.c_str(), api_key.c_str(), shop_id, &merch_records[0], merch_records.size());
 	logger::info(FMT_STRING("CreateMerchandiseList create_merchandise_list result: {:d}"), merchandise_list_id);
+	regMap.SendEvent(merchandise_list_id);
+	regMap.Unregister(merchant_chest);
 	return merchandise_list_id;
 }
+
+bool CreateMerchandiseList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* merchant_chest) {
+	logger::info("Entered CreateMerchandiseList");
+
+	if (!merchant_chest) {
+		logger::error("CreateMerchandiseList merchant_chest is null!");
+		return false;
+	}
+
+	std::thread thread(CreateMerchandiseListImpl, api_url, api_key, shop_id, merchant_chest);
+	thread.detach();
+	return true;
+}
+
