@@ -109,276 +109,279 @@ bool LoadMerchandiseImpl(
 		return false;
 	}
 
-	// Since this method is running asyncronously in a thread, set up a callback on the trigger ref that will receive an event with the result
-	SKSE::RegistrationMap<bool> regMap = SKSE::RegistrationMap<bool>();
-	regMap.Register(toggle_ref, RE::BSFixedString("OnLoadMerchandise"));
-
 	RE::TESObjectREFR * merchant_chest = merchant_shelf->GetLinkedRef(chest_keyword);
 	if (!merchant_chest) {
 		logger::error("LoadMerchandise merchant_chest is null!");
-		regMap.SendEvent(false);
-		regMap.Unregister(toggle_ref);
 		return false;
 	}
 
 	FFIResult<MerchRecordVec> result = get_merchandise_list(api_url.c_str(), api_key.c_str(), merchandise_list_id);
-	if (result.IsOk()) {
-		logger::info("LoadMerchandise get_merchandise_list result OK");
-		MerchRecordVec vec = result.AsOk();
-		logger::info(FMT_STRING("LoadMerchandise vec len: {:d}, cap: {:d}"), vec.len, vec.cap);
-		int max_page = std::ceil((float)(vec.len - 1) / (float)9);
 
-		if (vec.len > 0 && page > max_page) {
-			logger::info(FMT_STRING("LoadMerchandise page {:d} is greater than max_page {:d}, doing nothing"), page, max_page);
-			regMap.SendEvent(true);
-			regMap.Unregister(toggle_ref);
-			return true;
-		}
+	// Placing the refs must be done on the main thread otherwise disabling & deleting refs in ClearMerchandiseImpl causes a crash
+	auto task = SKSE::GetTaskInterface();
+	task->AddTask([result, merchant_chest, merchant_shelf, placeholder_static, shelf_keyword, item_keyword, prev_keyword, next_keyword, page, toggle_ref, cell, data_handler, a_vm, extra_linked_ref_vtbl, MoveTo_Native, PlaceAtMe_Native]() {
+		// Since this method is running asyncronously in a thread, set up a callback on the trigger ref that will receive an event with the result
+		SKSE::RegistrationMap<bool> regMap = SKSE::RegistrationMap<bool>();
+		regMap.Register(toggle_ref, RE::BSFixedString("OnLoadMerchandise"));
 
-		ClearMerchandiseImpl(merchant_chest, merchant_shelf, placeholder_static, shelf_keyword, item_keyword);
+		if (result.IsOk()) {
+			logger::info("LoadMerchandise get_merchandise_list result OK");
+			MerchRecordVec vec = result.AsOk();
+			logger::info(FMT_STRING("LoadMerchandise vec len: {:d}, cap: {:d}"), vec.len, vec.cap);
+			int max_page = std::ceil((float)(vec.len - 1) / (float)9);
 
-		logger::info(FMT_STRING("LoadMerchandise current shelf page is: {:d}"), merchant_shelf->extraList.GetCount());
-		for (int i = 0; i < vec.len; i++) {
-			MerchRecord rec = vec.ptr[i];
-			logger::info(FMT_STRING("LoadMerchandise item: {:d}"), i);
-			if (i < (page - 1) * 9 || i >= (page - 1) * 9 + 9) {
-				continue;
+			if (vec.len > 0 && page > max_page) {
+				logger::info(FMT_STRING("LoadMerchandise page {:d} is greater than max_page {:d}, doing nothing"), page, max_page);
+				regMap.SendEvent(true);
+				regMap.Unregister(toggle_ref);
+				return true;
 			}
 
-			RE::TESForm * form = data_handler->LookupForm(rec.local_form_id, rec.mod_name);
-			if (!form) { // form is not found, might be in an uninstalled mod
-				logger::warn(FMT_STRING("LoadMerchandise not spawning ref for form that could not be found in installed mods: {} {:d}"), rec.mod_name, rec.local_form_id);
-				continue;
-			}
-			logger::info(FMT_STRING("LoadMerchandise lookup form name: {}, form_id: {:x}, form_type: {:x}"), form->GetName(), (uint32_t)form->GetFormID(), (uint32_t)form->GetFormType());
-			RE::TESObjectREFR * ref = PlaceAtMe_Native(a_vm, 0, merchant_shelf, form, 1, false, false);
 
-			RE::TESBoundObject * base = ref->GetBaseObject();
-			RE::NiNPShortPoint3 boundMin = base->boundData.boundMin;
-			RE::NiNPShortPoint3 boundMax = base->boundData.boundMax;
-			uint16_t bound_x = boundMax.x > boundMin.x ? boundMax.x - boundMin.x : boundMin.x - boundMax.x;
-			uint16_t bound_y = boundMax.y > boundMin.y ? boundMax.y - boundMin.y : boundMin.y - boundMax.y;
-			uint16_t bound_z = boundMax.z > boundMin.z ? boundMax.z - boundMin.z : boundMin.z - boundMax.z;
-			logger::info(FMT_STRING("LoadMerchandise ref bounds width: {:d}, length: {:d}, height: {:d}"), bound_x, bound_y, bound_z);
+			ClearMerchandiseImpl(merchant_chest, merchant_shelf, placeholder_static, shelf_keyword, item_keyword);
 
-			RE::TESObjectREFR * placeholder_ref = PlaceAtMe_Native(a_vm, 0, merchant_shelf, placeholder_static, 1, false, false);
+			logger::info(FMT_STRING("LoadMerchandise current shelf page is: {:d}"), merchant_shelf->extraList.GetCount());
+			for (int i = 0; i < vec.len; i++) {
+				MerchRecord rec = vec.ptr[i];
+				logger::info(FMT_STRING("LoadMerchandise item: {:d}"), i);
+				if (i < (page - 1) * 9 || i >= (page - 1) * 9 + 9) {
+					continue;
+				}
 
-			RE::NiPoint3 bound_min = ref->GetBoundMin();
-			RE::NiPoint3 bound_max = ref->GetBoundMax();
-			logger::info(FMT_STRING("LoadMerchandise ref bounds min: {:.2f} {:.2f} {:.2f}, max: {:.2f} {:.2f} {:.2f}"), bound_min.x, bound_min.y, bound_min.z, bound_max.x, bound_max.y, bound_max.z);
+				RE::TESForm * form = data_handler->LookupForm(rec.local_form_id, rec.mod_name);
+				if (!form) { // form is not found, might be in an uninstalled mod
+					logger::warn(FMT_STRING("LoadMerchandise not spawning ref for form that could not be found in installed mods: {} {:d}"), rec.mod_name, rec.local_form_id);
+					continue;
+				}
+				logger::info(FMT_STRING("LoadMerchandise lookup form name: {}, form_id: {:x}, form_type: {:x}"), form->GetName(), (uint32_t)form->GetFormID(), (uint32_t)form->GetFormType());
+				RE::TESObjectREFR * ref = PlaceAtMe_Native(a_vm, 0, merchant_shelf, form, 1, false, false);
 
-			RE::ExtraLinkedRef * extra_linked_ref = (RE::ExtraLinkedRef*)RE::BSExtraData::Create(sizeof(RE::ExtraLinkedRef), extra_linked_ref_vtbl.address());
-			// RE::BGSKeywordForm * place_keyword1 = data_handler->LookupForm<RE::BGSKeywordForm>(595228, "BazaarRealm.esm");
-			extra_linked_ref->linkedRefs.push_back({shelf_keyword, merchant_shelf});
-			placeholder_ref->extraList.Add(extra_linked_ref);
-			// _MESSAGE("PLACEHOLDER LINKED REF: %s", placeholder_ref->GetLinkedRef(nullptr)->GetName());
+				RE::TESBoundObject * base = ref->GetBaseObject();
+				RE::NiNPShortPoint3 boundMin = base->boundData.boundMin;
+				RE::NiNPShortPoint3 boundMax = base->boundData.boundMax;
+				uint16_t bound_x = boundMax.x > boundMin.x ? boundMax.x - boundMin.x : boundMin.x - boundMax.x;
+				uint16_t bound_y = boundMax.y > boundMin.y ? boundMax.y - boundMin.y : boundMin.y - boundMax.y;
+				uint16_t bound_z = boundMax.z > boundMin.z ? boundMax.z - boundMin.z : boundMin.z - boundMax.z;
+				logger::info(FMT_STRING("LoadMerchandise ref bounds width: {:d}, length: {:d}, height: {:d}"), bound_x, bound_y, bound_z);
 
-			// This extra count stored on the placeholder_ref indicates the quanity of the merchandise item it is linked to
-			RE::ExtraCount * extra_page_num = (RE::ExtraCount*)RE::BSExtraData::Create(sizeof(RE::ExtraCount), RE::Offset::ExtraCount::Vtbl.address());
-			extra_page_num->count = rec.quantity;
-			placeholder_ref->extraList.Add(extra_page_num);
+				RE::TESObjectREFR * placeholder_ref = PlaceAtMe_Native(a_vm, 0, merchant_shelf, placeholder_static, 1, false, false);
 
-			float scale = 1;
-			int max_over_bound = 0;
-			if (max_over_bound < bound_x - 34) {
-				max_over_bound = bound_x - 34;
-			}
-			if (max_over_bound < bound_y - 34) {
-				max_over_bound = bound_y - 34;
-			}
-			if (max_over_bound < bound_z - 34) {
-				max_over_bound = bound_z - 34;
-			}
-			if (max_over_bound > 0) {
-				scale = ((float)34 / (float)(max_over_bound + 34)) * (float)100;
-				logger::info(FMT_STRING("LoadMerchandise new scale: {:.2f} {:d} (max_over_bound: {:d}"), scale, static_cast<uint16_t>(scale), max_over_bound);
-				ref->refScale = static_cast<uint16_t>(scale);
-				placeholder_ref->refScale = static_cast<uint16_t>(scale);
-			}
+				RE::NiPoint3 bound_min = ref->GetBoundMin();
+				RE::NiPoint3 bound_max = ref->GetBoundMax();
+				logger::info(FMT_STRING("LoadMerchandise ref bounds min: {:.2f} {:.2f} {:.2f}, max: {:.2f} {:.2f} {:.2f}"), bound_min.x, bound_min.y, bound_min.z, bound_max.x, bound_max.y, bound_max.z);
 
-			RE::NiPoint3 shelf_position = merchant_shelf->data.location;
-			RE::NiPoint3 shelf_angle = merchant_shelf->data.angle;
-			RE::NiPoint3 ref_angle = RE::NiPoint3(shelf_angle.x, shelf_angle.y, shelf_angle.z - 3.14);
-			RE::NiPoint3 ref_position;
-			int x_imbalance = (((bound_min.x  * -1) - bound_max.x) * (scale / 100)) / 2;
-			int y_imbalance = (((bound_min.y  * -1) - bound_max.y) * (scale / 100)) / 2;
-			// adjusts z-height so item doesn't spawn underneath it's shelf
-			int z_imbalance = (bound_min.z  * -1) - bound_max.z;
-			if (z_imbalance < 0) {
-				z_imbalance = 0;
-			}
-			// TODO: make page size and buy_activator positions configurable per "shelf" type (where is config stored?)
-			if (i % 9 == 0) {
-				ref_position = RE::NiPoint3(shelf_position.x + 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 110 + z_imbalance);
-			}
-			else if (i % 9 == 1) {
-				ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 110 + z_imbalance);
-			}
-			else if (i % 9 == 2) {
-				ref_position = RE::NiPoint3(shelf_position.x - 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 110 + z_imbalance);
-			}
-			else if (i % 9 == 3) {
-				ref_position = RE::NiPoint3(shelf_position.x + 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 65 + z_imbalance);
-			}
-			else if (i % 9 == 4) {
-				ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 65 + z_imbalance);
-			}
-			else if (i % 9 == 5) {
-				ref_position = RE::NiPoint3(shelf_position.x - 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 65 + z_imbalance);
-			}
-			else if (i % 9 == 6) {
-				ref_position = RE::NiPoint3(shelf_position.x + 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
-			}
-			else if (i % 9 == 7) {
-				ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
-			}
-			else if (i % 9 == 8) {
-				ref_position = RE::NiPoint3(shelf_position.x - 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
-			}
-			MoveTo_Native(ref, ref->CreateRefHandle(), cell, cell->worldSpace, ref_position - RE::NiPoint3(10000, 10000, 10000), ref_angle);
-			MoveTo_Native(placeholder_ref, placeholder_ref->CreateRefHandle(), cell, cell->worldSpace, ref_position, ref_angle);
-			// ref->Load3D(false);
-			// Note: passing false to this method occasionally causes the game to crash due to access violation
-			// RE::NiAVObject * obj_3d = ref->Load3D(true);
-			// None of this works, havok is still applied, which isn't that bad really
-			// _MESSAGE("objectReference: %x, GetBaseObject: %x", *ref->data.objectReference, *ref->GetBaseObject());
-			// RE::NiAVObject * cloned_obj_3d = ref->data.objectReference->Clone3D(placeholder_ref, false);
-			// _MESSAGE("loaded 3d: %x, cloned 3d: %x", *obj_3d, *cloned_obj_3d);
-			// Need to Load3D() before calling this:
-			// ref->SetMotionType(RE::TESObjectREFR::MotionType::kKeyframed);
-			// obj_3d->SetMotionType(static_cast<uint32_t>(RE::TESObjectREFR::MotionType::kKeyframed));
-			// obj_3d->SetMotionType(5);
-			// Fails if loadedData is nullptr (if Load3D is not called first):
-			// ref->loadedData->flags = ref->loadedData->flags | RE::TESObjectREFR::RecordFlags::kDontHavokSettle | RE::TESObjectREFR::RecordFlags::kCollisionsDisabled | RE::TESObjectREFR::RecordFlags::kCollisionsDisabled;
-			// ref->InitHavok();
-			/// ref->DetachHavok(obj_3d);
-			// ref->SetCollision(false);
-			// ref->ClampToGround();
-			// placeholder_ref->Load3D(false);
-			// RE::NiPointer<RE::NiAVObject> placeholder_3d_data = placeholder_ref->loadedData->data3D;
-			// _MESSAGE("PLACEHOLDER 3D (pre-set-3d): %x", placeholder_3d_data.get());
-			// placeholder_ref->Set3D(obj_3d); // steal the 3D model from the item ref
+				RE::ExtraLinkedRef * extra_linked_ref = (RE::ExtraLinkedRef*)RE::BSExtraData::Create(sizeof(RE::ExtraLinkedRef), extra_linked_ref_vtbl.address());
+				// RE::BGSKeywordForm * place_keyword1 = data_handler->LookupForm<RE::BGSKeywordForm>(595228, "BazaarRealm.esm");
+				extra_linked_ref->linkedRefs.push_back({shelf_keyword, merchant_shelf});
+				placeholder_ref->extraList.Add(extra_linked_ref);
+				// _MESSAGE("PLACEHOLDER LINKED REF: %s", placeholder_ref->GetLinkedRef(nullptr)->GetName());
 
-			// RE::ExtraLight * x_light = ref->extraList.GetByType<RE::ExtraLight>();
-			// if (x_light) {
-				// _MESSAGE("ExtraLight exists on ref: %x", x_light);
-				// ref->extraList.RemoveByType(RE::ExtraDataType::kLight);
-				// x_light = ref->extraList.GetByType<RE::ExtraLight>();
-				// if (!x_light) {
-					// _MESSAGE("ExtraLight removed");
+				// This extra count stored on the placeholder_ref indicates the quanity of the merchandise item it is linked to
+				RE::ExtraCount * extra_page_num = (RE::ExtraCount*)RE::BSExtraData::Create(sizeof(RE::ExtraCount), RE::Offset::ExtraCount::Vtbl.address());
+				extra_page_num->count = rec.quantity;
+				placeholder_ref->extraList.Add(extra_page_num);
+
+				float scale = 1;
+				int max_over_bound = 0;
+				if (max_over_bound < bound_x - 34) {
+					max_over_bound = bound_x - 34;
+				}
+				if (max_over_bound < bound_y - 34) {
+					max_over_bound = bound_y - 34;
+				}
+				if (max_over_bound < bound_z - 34) {
+					max_over_bound = bound_z - 34;
+				}
+				if (max_over_bound > 0) {
+					scale = ((float)34 / (float)(max_over_bound + 34)) * (float)100;
+					logger::info(FMT_STRING("LoadMerchandise new scale: {:.2f} {:d} (max_over_bound: {:d}"), scale, static_cast<uint16_t>(scale), max_over_bound);
+					ref->refScale = static_cast<uint16_t>(scale);
+					placeholder_ref->refScale = static_cast<uint16_t>(scale);
+				}
+
+				RE::NiPoint3 shelf_position = merchant_shelf->data.location;
+				RE::NiPoint3 shelf_angle = merchant_shelf->data.angle;
+				RE::NiPoint3 ref_angle = RE::NiPoint3(shelf_angle.x, shelf_angle.y, shelf_angle.z - 3.14);
+				RE::NiPoint3 ref_position;
+				int x_imbalance = (((bound_min.x  * -1) - bound_max.x) * (scale / 100)) / 2;
+				int y_imbalance = (((bound_min.y  * -1) - bound_max.y) * (scale / 100)) / 2;
+				// adjusts z-height so item doesn't spawn underneath it's shelf
+				int z_imbalance = (bound_min.z  * -1) - bound_max.z;
+				if (z_imbalance < 0) {
+					z_imbalance = 0;
+				}
+				// TODO: make page size and buy_activator positions configurable per "shelf" type (where is config stored?)
+				if (i % 9 == 0) {
+					ref_position = RE::NiPoint3(shelf_position.x + 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 110 + z_imbalance);
+				}
+				else if (i % 9 == 1) {
+					ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 110 + z_imbalance);
+				}
+				else if (i % 9 == 2) {
+					ref_position = RE::NiPoint3(shelf_position.x - 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 110 + z_imbalance);
+				}
+				else if (i % 9 == 3) {
+					ref_position = RE::NiPoint3(shelf_position.x + 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 65 + z_imbalance);
+				}
+				else if (i % 9 == 4) {
+					ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 65 + z_imbalance);
+				}
+				else if (i % 9 == 5) {
+					ref_position = RE::NiPoint3(shelf_position.x - 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 65 + z_imbalance);
+				}
+				else if (i % 9 == 6) {
+					ref_position = RE::NiPoint3(shelf_position.x + 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
+				}
+				else if (i % 9 == 7) {
+					ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
+				}
+				else if (i % 9 == 8) {
+					ref_position = RE::NiPoint3(shelf_position.x - 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
+				}
+				MoveTo_Native(ref, ref->CreateRefHandle(), cell, cell->worldSpace, ref_position - RE::NiPoint3(10000, 10000, 10000), ref_angle);
+				MoveTo_Native(placeholder_ref, placeholder_ref->CreateRefHandle(), cell, cell->worldSpace, ref_position, ref_angle);
+				// ref->Load3D(false);
+				// Note: passing false to this method occasionally causes the game to crash due to access violation
+				// RE::NiAVObject * obj_3d = ref->Load3D(true);
+				// None of this works, havok is still applied, which isn't that bad really
+				// _MESSAGE("objectReference: %x, GetBaseObject: %x", *ref->data.objectReference, *ref->GetBaseObject());
+				// RE::NiAVObject * cloned_obj_3d = ref->data.objectReference->Clone3D(placeholder_ref, false);
+				// _MESSAGE("loaded 3d: %x, cloned 3d: %x", *obj_3d, *cloned_obj_3d);
+				// Need to Load3D() before calling this:
+				// ref->SetMotionType(RE::TESObjectREFR::MotionType::kKeyframed);
+				// obj_3d->SetMotionType(static_cast<uint32_t>(RE::TESObjectREFR::MotionType::kKeyframed));
+				// obj_3d->SetMotionType(5);
+				// Fails if loadedData is nullptr (if Load3D is not called first):
+				// ref->loadedData->flags = ref->loadedData->flags | RE::TESObjectREFR::RecordFlags::kDontHavokSettle | RE::TESObjectREFR::RecordFlags::kCollisionsDisabled | RE::TESObjectREFR::RecordFlags::kCollisionsDisabled;
+				// ref->InitHavok();
+				/// ref->DetachHavok(obj_3d);
+				// ref->SetCollision(false);
+				// ref->ClampToGround();
+				// placeholder_ref->Load3D(false);
+				// RE::NiPointer<RE::NiAVObject> placeholder_3d_data = placeholder_ref->loadedData->data3D;
+				// _MESSAGE("PLACEHOLDER 3D (pre-set-3d): %x", placeholder_3d_data.get());
+				// placeholder_ref->Set3D(obj_3d); // steal the 3D model from the item ref
+
+				// RE::ExtraLight * x_light = ref->extraList.GetByType<RE::ExtraLight>();
+				// if (x_light) {
+					// _MESSAGE("ExtraLight exists on ref: %x", x_light);
+					// ref->extraList.RemoveByType(RE::ExtraDataType::kLight);
+					// x_light = ref->extraList.GetByType<RE::ExtraLight>();
+					// if (!x_light) {
+						// _MESSAGE("ExtraLight removed");
+					// }
+					// else {
+						// _MESSAGE("After removing ExtraLight: %x", x_light);
+					// }
 				// }
-				// else {
-					// _MESSAGE("After removing ExtraLight: %x", x_light);
-				// }
-			// }
-			
-			// x_light = placeholder_ref->extraList.GetByType<RE::ExtraLight>();
-			// if (x_light) {
-				// _MESSAGE("ExtraLight exists on placeholder_ref: %x", x_light);
-				// placeholder_ref->extraList.RemoveByType(RE::ExtraDataType::kLight);
+				
 				// x_light = placeholder_ref->extraList.GetByType<RE::ExtraLight>();
-				// if (!x_light) {
-					// _MESSAGE("ExtraLight removed");
+				// if (x_light) {
+					// _MESSAGE("ExtraLight exists on placeholder_ref: %x", x_light);
+					// placeholder_ref->extraList.RemoveByType(RE::ExtraDataType::kLight);
+					// x_light = placeholder_ref->extraList.GetByType<RE::ExtraLight>();
+					// if (!x_light) {
+						// _MESSAGE("ExtraLight removed");
+					// }
+					// else {
+						// _MESSAGE("After removing ExtraLight: %x", x_light);
+					// }
+				// }
+				RE::BSFixedString name = RE::BSFixedString::BSFixedString(ref->GetName());
+				placeholder_ref->SetDisplayName(name, true);
+				// placeholder_ref->SetObjectReference(base);
+				placeholder_ref->extraList.SetOwner(base); // I'm abusing "owner" to link the activator with the Form that should be bought once activated
+
+				// Do I still need to set this flag? I could maybe use the deleted flag instead
+				// uint32_t phantom_ref_flag = 1 << 9; // this is my own made up ExtraFlags::Flag that marks the reference we stole the 3D from as needing to be deleted at the start of the next LoadMerchandise
+				// RE::ExtraFlags * x_flags = ref->extraList.GetByType<RE::ExtraFlags>();
+				// RE::ExtraFlags::Flag new_flags;
+				// if (x_flags) {
+					// _MESSAGE("REF XFLAGS pre-set: %x", x_flags->flags);
+					// new_flags = (RE::ExtraFlags::Flag)((uint32_t)(x_flags->flags) | phantom_ref_flag);
 				// }
 				// else {
-					// _MESSAGE("After removing ExtraLight: %x", x_light);
+					// new_flags = (RE::ExtraFlags::Flag)phantom_ref_flag;
 				// }
-			// }
-			RE::BSFixedString name = RE::BSFixedString::BSFixedString(ref->GetName());
-			placeholder_ref->SetDisplayName(name, true);
-			// placeholder_ref->SetObjectReference(base);
-			placeholder_ref->extraList.SetOwner(base); // I'm abusing "owner" to link the activator with the Form that should be bought once activated
+				//ref->extraList.SetExtraFlags(new_flags, true);
+				// x_flags = ref->extraList.GetByType<RE::ExtraFlags>();
+				extra_linked_ref->linkedRefs.push_back({item_keyword, ref});
+				// _MESSAGE("REF XFLAGS post-set: %x", x_flags->flags);
 
-			// Do I still need to set this flag? I could maybe use the deleted flag instead
-			// uint32_t phantom_ref_flag = 1 << 9; // this is my own made up ExtraFlags::Flag that marks the reference we stole the 3D from as needing to be deleted at the start of the next LoadMerchandise
-			// RE::ExtraFlags * x_flags = ref->extraList.GetByType<RE::ExtraFlags>();
-			// RE::ExtraFlags::Flag new_flags;
-			// if (x_flags) {
-				// _MESSAGE("REF XFLAGS pre-set: %x", x_flags->flags);
-				// new_flags = (RE::ExtraFlags::Flag)((uint32_t)(x_flags->flags) | phantom_ref_flag);
-			// }
-			// else {
-				// new_flags = (RE::ExtraFlags::Flag)phantom_ref_flag;
-			// }
-			//ref->extraList.SetExtraFlags(new_flags, true);
-			// x_flags = ref->extraList.GetByType<RE::ExtraFlags>();
-			extra_linked_ref->linkedRefs.push_back({item_keyword, ref});
-			// _MESSAGE("REF XFLAGS post-set: %x", x_flags->flags);
+				// Test deleting ref that owns 3d
+				// ref->Disable(); // disabling first is required to prevent CTD on unloading cell
+				// ref->SetDelete(true);
+				// ref->Predestroy();
+				// ref->formFlags |= RE::TESObjectREFR::RecordFlags::kDeleted;
+				// ref->AddChange(RE::TESObjectREFR::ChangeFlags::kItemExtraData);
+				// ref->AddChange(RE::TESObjectREFR::ChangeFlags::kGameOnlyExtra);
+				// ref->AddChange(RE::TESObjectREFR::ChangeFlags::kCreatedOnlyExtra);
 
-			// Test deleting ref that owns 3d
-			// ref->Disable(); // disabling first is required to prevent CTD on unloading cell
-			// ref->SetDelete(true);
-			// ref->Predestroy();
-			// ref->formFlags |= RE::TESObjectREFR::RecordFlags::kDeleted;
-			// ref->AddChange(RE::TESObjectREFR::ChangeFlags::kItemExtraData);
-			// ref->AddChange(RE::TESObjectREFR::ChangeFlags::kGameOnlyExtra);
-			// ref->AddChange(RE::TESObjectREFR::ChangeFlags::kCreatedOnlyExtra);
+				// placeholder_ref->inGameFormFlags |= RE::TESObjectREFR::InGameFormFlag::kWantsDelete;
+				// placeholder_ref->AddChange(RE::TESObjectREFR::ChangeFlags::kGameOnlyExtra);
+			}
 
-			// placeholder_ref->inGameFormFlags |= RE::TESObjectREFR::InGameFormFlag::kWantsDelete;
-			// placeholder_ref->AddChange(RE::TESObjectREFR::ChangeFlags::kGameOnlyExtra);
+			// I'm abusing the ExtraCount ExtraData type for storing the current page number state of the shelf
+			RE::ExtraCount * extra_page_num = merchant_shelf->extraList.GetByType<RE::ExtraCount>();
+			if (!extra_page_num) {
+				extra_page_num = (RE::ExtraCount*)RE::BSExtraData::Create(sizeof(RE::ExtraCount), RE::Offset::ExtraCount::Vtbl.address());
+				merchant_shelf->extraList.Add(extra_page_num);
+			}
+			extra_page_num->count = page;
+			logger::info(FMT_STRING("LoadMerchandise set shelf page to: {:d}"), merchant_shelf->extraList.GetCount());
+			
+			// I'm abusing the ExtraCannotWear ExtraData type as a boolean marker which stores whether the shelf is in a loaded or cleared state
+			// The presense of ExtraCannotWear == loaded, its absence == cleared
+			// Please don't try to wear the shelves :)
+			RE::ExtraCannotWear * extra_is_loaded = merchant_shelf->extraList.GetByType<RE::ExtraCannotWear>();
+			if (!extra_is_loaded) {
+				extra_is_loaded = (RE::ExtraCannotWear*)RE::BSExtraData::Create(sizeof(RE::ExtraCannotWear), RE::Offset::ExtraCannotWear::Vtbl.address());
+				merchant_shelf->extraList.Add(extra_is_loaded);
+			}
+			logger::info(FMT_STRING("LoadMerchandise set loaded: {:d}"), merchant_shelf->extraList.GetByType<RE::ExtraCannotWear>() != nullptr);
+
+			RE::TESObjectREFR * next_ref = merchant_shelf->GetLinkedRef(next_keyword);
+			if (!next_ref) {
+				logger::error("LoadMerchandise next_ref is null!");
+				regMap.SendEvent(false);
+				regMap.Unregister(toggle_ref);
+				return false;
+			}
+			RE::TESObjectREFR * prev_ref = merchant_shelf->GetLinkedRef(prev_keyword);
+			if (!prev_ref) {
+				logger::error("LoadMerchandise prev_ref is null!");
+				regMap.SendEvent(false);
+				regMap.Unregister(toggle_ref);
+				return false;
+			}
+			toggle_ref->SetDisplayName("Clear merchandise", true);
+			if (page == max_page) {
+				next_ref->SetDisplayName("(No next page)", true);
+			}
+			else {
+				next_ref->SetDisplayName(fmt::format("Advance to page {:d}", page + 1).c_str(), true);
+			}
+			if (page == 1) {
+				prev_ref->SetDisplayName("(No previous page)", true);
+			}
+			else {
+				prev_ref->SetDisplayName(fmt::format("Back to page {:d}", page - 1).c_str(), true);
+			}
+			// auto messaging = SKSE::GetModCallbackEventSource();
+			// const SKSE::ModCallbackEvent event = { RE::BSFixedString("BazaarRealm_LoadMerchandiseDone"), RE::BSFixedString(""), 0, nullptr };
+			// messaging->SendEvent(&event);
+			// a_vm->SendEventAll(RE::BSFixedString("BazaarRealm_LoadMerchandiseDone"), RE::MakeFunctionArguments());
 		}
-
-		// I'm abusing the ExtraCount ExtraData type for storing the current page number state of the shelf
-		RE::ExtraCount * extra_page_num = merchant_shelf->extraList.GetByType<RE::ExtraCount>();
-		if (!extra_page_num) {
-			extra_page_num = (RE::ExtraCount*)RE::BSExtraData::Create(sizeof(RE::ExtraCount), RE::Offset::ExtraCount::Vtbl.address());
-			merchant_shelf->extraList.Add(extra_page_num);
-		}
-		extra_page_num->count = page;
-		logger::info(FMT_STRING("LoadMerchandise set shelf page to: {:d}"), merchant_shelf->extraList.GetCount());
-		
-		// I'm abusing the ExtraCannotWear ExtraData type as a boolean marker which stores whether the shelf is in a loaded or cleared state
-		// The presense of ExtraCannotWear == loaded, its absence == cleared
-		// Please don't try to wear the shelves :)
-		RE::ExtraCannotWear * extra_is_loaded = merchant_shelf->extraList.GetByType<RE::ExtraCannotWear>();
-		if (!extra_is_loaded) {
-			extra_is_loaded = (RE::ExtraCannotWear*)RE::BSExtraData::Create(sizeof(RE::ExtraCannotWear), RE::Offset::ExtraCannotWear::Vtbl.address());
-			merchant_shelf->extraList.Add(extra_is_loaded);
-		}
-		logger::info(FMT_STRING("LoadMerchandise set loaded: {:d}"), merchant_shelf->extraList.GetByType<RE::ExtraCannotWear>() != nullptr);
-
-		RE::TESObjectREFR * next_ref = merchant_shelf->GetLinkedRef(next_keyword);
-		if (!next_ref) {
-			logger::error("LoadMerchandise next_ref is null!");
+		else {
+			const char * error = result.AsErr();
+			logger::error(FMT_STRING("LoadMerchandise get_merchandise_list error: {}"), error);
 			regMap.SendEvent(false);
 			regMap.Unregister(toggle_ref);
 			return false;
 		}
-		RE::TESObjectREFR * prev_ref = merchant_shelf->GetLinkedRef(prev_keyword);
-		if (!prev_ref) {
-			logger::error("LoadMerchandise prev_ref is null!");
-			regMap.SendEvent(false);
-			regMap.Unregister(toggle_ref);
-			return false;
-		}
-		toggle_ref->SetDisplayName("Clear merchandise", true);
-		if (page == max_page) {
-			next_ref->SetDisplayName("(No next page)", true);
-		}
-		else {
-			next_ref->SetDisplayName(fmt::format("Advance to page %d", page + 1).c_str(), true);
-		}
-		if (page == 1) {
-			prev_ref->SetDisplayName("(No previous page)", true);
-		}
-		else {
-			prev_ref->SetDisplayName(fmt::format("Back to page %d", page - 1).c_str(), true);
-		}
-		// auto messaging = SKSE::GetModCallbackEventSource();
-		// const SKSE::ModCallbackEvent event = { RE::BSFixedString("BazaarRealm_LoadMerchandiseDone"), RE::BSFixedString(""), 0, nullptr };
-		// messaging->SendEvent(&event);
-		// a_vm->SendEventAll(RE::BSFixedString("BazaarRealm_LoadMerchandiseDone"), RE::MakeFunctionArguments());
-	}
-	else {
-		const char * error = result.AsErr();
-		logger::error(FMT_STRING("LoadMerchandise get_merchandise_list error: {}"), error);
-		regMap.SendEvent(false);
+		regMap.SendEvent(true);
 		regMap.Unregister(toggle_ref);
-		return false;
-	}
-	
-	regMap.SendEvent(true);
-	regMap.Unregister(toggle_ref);
+	});
 	return true;
 }
 
