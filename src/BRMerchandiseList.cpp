@@ -2,7 +2,7 @@
 
 #include "NativeFunctions.h"
 
-// TODO: replace "placeholder" with "buy_activator" and "ref" with "item_ref"
+// TODO: should I replace "placeholder" with "buy_activator" and "ref" with "item_ref"?
 bool ClearMerchandiseImpl(RE::TESObjectREFR* merchant_chest, RE::TESObjectREFR* merchant_shelf, RE::TESForm* placeholder_static, RE::BGSKeyword * shelf_keyword, RE::BGSKeyword * item_keyword)
 {
 	logger::info("Entered ClearMerchandiseImpl");
@@ -27,23 +27,12 @@ bool ClearMerchandiseImpl(RE::TESObjectREFR* merchant_chest, RE::TESObjectREFR* 
 						if (linked_ref) {
 							logger::info(FMT_STRING("ClearMerchandise deleting ref linked to placeholder ref: {:x}"), (uint32_t)linked_ref->GetFormID());
 							// TODO: should I use the MemoryManager to free these references?
-							// linked_ref->Load3D(false);
-							// linked_ref->SetPosition(linked_ref->GetPosition() -= RE::NiPoint3(-10000, -10000, -10000));
-							// linked_ref->Update3DPosition(false);
-							// linked_ref->Set3D(ref->GetCurrent3D());
-							// linked_ref->Release3DRelatedData();
 							linked_ref->Disable(); // disabling first is required to prevent CTD on unloading cell
 							linked_ref->SetDelete(true);
-							// linked_ref->DeleteThis(); // does this do anything?
 						}
 						logger::info(FMT_STRING("ClearMerchandise deleting existing placeholder ref: {:x}"), (uint32_t)ref->GetFormID());
-						// ref->Load3D(false);
-						// ref->SetPosition(ref->GetPosition() -= RE::NiPoint3(-10000, -10000, -10000));
-						// ref->Update3DPosition(false);
-						// ref->Release3DRelatedData();
 						ref->Disable(); // disabling first is required to prevent CTD on unloading cell
 						ref->SetDelete(true);
-						// ref->DeleteThis(); // does this do anything?
 						cell->references.erase(*entry++); // prevents slowdowns after many runs of ClearMerchandise
 					}
 					else {
@@ -171,10 +160,8 @@ bool LoadMerchandiseImpl(
 				logger::info(FMT_STRING("LoadMerchandise ref bounds min: {:.2f} {:.2f} {:.2f}, max: {:.2f} {:.2f} {:.2f}"), bound_min.x, bound_min.y, bound_min.z, bound_max.x, bound_max.y, bound_max.z);
 
 				RE::ExtraLinkedRef * extra_linked_ref = (RE::ExtraLinkedRef*)RE::BSExtraData::Create(sizeof(RE::ExtraLinkedRef), extra_linked_ref_vtbl.address());
-				// RE::BGSKeywordForm * place_keyword1 = data_handler->LookupForm<RE::BGSKeywordForm>(595228, "BazaarRealm.esm");
 				extra_linked_ref->linkedRefs.push_back({shelf_keyword, merchant_shelf});
 				placeholder_ref->extraList.Add(extra_linked_ref);
-				// _MESSAGE("PLACEHOLDER LINKED REF: %s", placeholder_ref->GetLinkedRef(nullptr)->GetName());
 
 				// This extra count stored on the placeholder_ref indicates the quanity of the merchandise item it is linked to
 				RE::ExtraCount * extra_page_num = (RE::ExtraCount*)RE::BSExtraData::Create(sizeof(RE::ExtraCount), RE::Offset::ExtraCount::Vtbl.address());
@@ -240,85 +227,10 @@ bool LoadMerchandiseImpl(
 				}
 				MoveTo_Native(ref, ref->CreateRefHandle(), cell, cell->worldSpace, ref_position - RE::NiPoint3(10000, 10000, 10000), ref_angle);
 				MoveTo_Native(placeholder_ref, placeholder_ref->CreateRefHandle(), cell, cell->worldSpace, ref_position, ref_angle);
-				// ref->Load3D(false);
-				// Note: passing false to this method occasionally causes the game to crash due to access violation
-				// RE::NiAVObject * obj_3d = ref->Load3D(true);
-				// None of this works, havok is still applied, which isn't that bad really
-				// _MESSAGE("objectReference: %x, GetBaseObject: %x", *ref->data.objectReference, *ref->GetBaseObject());
-				// RE::NiAVObject * cloned_obj_3d = ref->data.objectReference->Clone3D(placeholder_ref, false);
-				// _MESSAGE("loaded 3d: %x, cloned 3d: %x", *obj_3d, *cloned_obj_3d);
-				// Need to Load3D() before calling this:
-				// ref->SetMotionType(RE::TESObjectREFR::MotionType::kKeyframed);
-				// obj_3d->SetMotionType(static_cast<uint32_t>(RE::TESObjectREFR::MotionType::kKeyframed));
-				// obj_3d->SetMotionType(5);
-				// Fails if loadedData is nullptr (if Load3D is not called first):
-				// ref->loadedData->flags = ref->loadedData->flags | RE::TESObjectREFR::RecordFlags::kDontHavokSettle | RE::TESObjectREFR::RecordFlags::kCollisionsDisabled | RE::TESObjectREFR::RecordFlags::kCollisionsDisabled;
-				// ref->InitHavok();
-				/// ref->DetachHavok(obj_3d);
-				// ref->SetCollision(false);
-				// ref->ClampToGround();
-				// placeholder_ref->Load3D(false);
-				// RE::NiPointer<RE::NiAVObject> placeholder_3d_data = placeholder_ref->loadedData->data3D;
-				// _MESSAGE("PLACEHOLDER 3D (pre-set-3d): %x", placeholder_3d_data.get());
-				// placeholder_ref->Set3D(obj_3d); // steal the 3D model from the item ref
-
-				// RE::ExtraLight * x_light = ref->extraList.GetByType<RE::ExtraLight>();
-				// if (x_light) {
-					// _MESSAGE("ExtraLight exists on ref: %x", x_light);
-					// ref->extraList.RemoveByType(RE::ExtraDataType::kLight);
-					// x_light = ref->extraList.GetByType<RE::ExtraLight>();
-					// if (!x_light) {
-						// _MESSAGE("ExtraLight removed");
-					// }
-					// else {
-						// _MESSAGE("After removing ExtraLight: %x", x_light);
-					// }
-				// }
-				
-				// x_light = placeholder_ref->extraList.GetByType<RE::ExtraLight>();
-				// if (x_light) {
-					// _MESSAGE("ExtraLight exists on placeholder_ref: %x", x_light);
-					// placeholder_ref->extraList.RemoveByType(RE::ExtraDataType::kLight);
-					// x_light = placeholder_ref->extraList.GetByType<RE::ExtraLight>();
-					// if (!x_light) {
-						// _MESSAGE("ExtraLight removed");
-					// }
-					// else {
-						// _MESSAGE("After removing ExtraLight: %x", x_light);
-					// }
-				// }
 				RE::BSFixedString name = RE::BSFixedString::BSFixedString(ref->GetName());
 				placeholder_ref->SetDisplayName(name, true);
-				// placeholder_ref->SetObjectReference(base);
 				placeholder_ref->extraList.SetOwner(base); // I'm abusing "owner" to link the activator with the Form that should be bought once activated
-
-				// Do I still need to set this flag? I could maybe use the deleted flag instead
-				// uint32_t phantom_ref_flag = 1 << 9; // this is my own made up ExtraFlags::Flag that marks the reference we stole the 3D from as needing to be deleted at the start of the next LoadMerchandise
-				// RE::ExtraFlags * x_flags = ref->extraList.GetByType<RE::ExtraFlags>();
-				// RE::ExtraFlags::Flag new_flags;
-				// if (x_flags) {
-					// _MESSAGE("REF XFLAGS pre-set: %x", x_flags->flags);
-					// new_flags = (RE::ExtraFlags::Flag)((uint32_t)(x_flags->flags) | phantom_ref_flag);
-				// }
-				// else {
-					// new_flags = (RE::ExtraFlags::Flag)phantom_ref_flag;
-				// }
-				//ref->extraList.SetExtraFlags(new_flags, true);
-				// x_flags = ref->extraList.GetByType<RE::ExtraFlags>();
 				extra_linked_ref->linkedRefs.push_back({item_keyword, ref});
-				// _MESSAGE("REF XFLAGS post-set: %x", x_flags->flags);
-
-				// Test deleting ref that owns 3d
-				// ref->Disable(); // disabling first is required to prevent CTD on unloading cell
-				// ref->SetDelete(true);
-				// ref->Predestroy();
-				// ref->formFlags |= RE::TESObjectREFR::RecordFlags::kDeleted;
-				// ref->AddChange(RE::TESObjectREFR::ChangeFlags::kItemExtraData);
-				// ref->AddChange(RE::TESObjectREFR::ChangeFlags::kGameOnlyExtra);
-				// ref->AddChange(RE::TESObjectREFR::ChangeFlags::kCreatedOnlyExtra);
-
-				// placeholder_ref->inGameFormFlags |= RE::TESObjectREFR::InGameFormFlag::kWantsDelete;
-				// placeholder_ref->AddChange(RE::TESObjectREFR::ChangeFlags::kGameOnlyExtra);
 			}
 
 			// I'm abusing the ExtraCount ExtraData type for storing the current page number state of the shelf
@@ -367,10 +279,6 @@ bool LoadMerchandiseImpl(
 			else {
 				prev_ref->SetDisplayName(fmt::format("Back to page {:d}", page - 1).c_str(), true);
 			}
-			// auto messaging = SKSE::GetModCallbackEventSource();
-			// const SKSE::ModCallbackEvent event = { RE::BSFixedString("BazaarRealm_LoadMerchandiseDone"), RE::BSFixedString(""), 0, nullptr };
-			// messaging->SendEvent(&event);
-			// a_vm->SendEventAll(RE::BSFixedString("BazaarRealm_LoadMerchandiseDone"), RE::MakeFunctionArguments());
 		}
 		else {
 			const char * error = result.AsErr();
@@ -561,7 +469,6 @@ RE::TESForm * BuyMerchandise(RE::StaticFunctionTag*, RE::TESObjectREFR * merchan
 	logger::info(FMT_STRING("BuyMerchandise owner: {}"), owner->GetName());
 	logger::info(FMT_STRING("BuyMerchandise count: {:d}"), merchandise_placeholder->extraList.GetCount());
 	// TODO: do add item here
-	// player->AddObjectToContainer(owner, *RE::ExtraDataList::ExtraDataList(), 1, merchandise_placeholder)
 	return owner;
 }
 
@@ -633,7 +540,6 @@ int CreateMerchandiseListImpl(RE::BSFixedString api_url, RE::BSFixedString api_k
 			const char * mod_name = file->fileName;
 			bool is_light = file->recordFlags.all(RE::TESFile::RecordFlag::kSmallFile);
 			uint32_t local_form_id = is_light ? form_id & 0xfff : form_id & 0xFFFFFF;
-			//_MESSAGE("FILE: %s isLight: %d formID: 0x%x localFormId: 0x%x", file_name, is_light, form_id, local_form_id);
 
 			logger::info(FMT_STRING("CreateMerchandiseList base form file_name: {}, local_form_id"), mod_name, local_form_id);
 

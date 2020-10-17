@@ -27,9 +27,6 @@ int CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_k
 	std::vector<RefRecord> ref_records;
 	for (auto entry = cell->references.begin(); entry != cell->references.end(); ++entry)
 	{
-		// TODO: skip saving the ref if it is part of mod file
-		//   OR: continue to save it, but with a special flag (useful in order to allow repositioning default statics)
-		//     Then, during Load, skip PlaceAtMe, lookup the ref by id and then reposition it
 		RE::TESObjectREFR * ref = (*entry).get();
 		const char * name = ref->GetName();
 		logger::info(FMT_STRING("CreateInteriorRefList ref: {}"), name);
@@ -63,7 +60,6 @@ int CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_k
 			char * base_file_name = base_file->fileName;
 			bool is_light = base_file->recordFlags.all(RE::TESFile::RecordFlag::kSmallFile);
 			uint32_t base_local_form_id = is_light ? base_form_id & 0xfff : base_form_id & 0xFFFFFF;
-			//_MESSAGE("FILE: %s isLight: %d formID: 0x%x localFormId: 0x%x", file_name, is_light, form_id, local_form_id);
 			RE::FormID ref_form_id = ref->GetFormID();
 			uint16_t ref_mod_index = ref_form_id >> 24;
 			char * ref_file_name = nullptr;
@@ -165,44 +161,6 @@ bool ClearCell(RE::StaticFunctionTag*)
 	return true;
 }
 
-// TODO: store the FFIResult in a HashMap cache (with ids assigned from incrementing a global int) and return its key in this function
-//   * bool BRResult.IsOk(int resultId) ; if false, then only GetErr() shall be accessed
-//   * bool BRResult.IsErr(int resultId) ; maybe not needed
-//   * string BRResult.GetErr(int resultId) ; always a string
-//	 * string BRResult.GetType(int resultId) ; returns type of Ok value encoded as string
-//   * BRResult.Drop(int resultId) ; once we are done using the data from the result or displaying an error, delete it from the cache and free the memory
-
-// These will panic if a) the result is an error or b) the type of the result value different than what was requested
-// That will cause CTDs but there's not much else to do, silently causing undefined behavior would be worse
-// Every step of this API has an explicit check you must make before continuing. If you break that contract, that's on you, the scripter.
-//   * string BRResult.GetString(int resultId)
-//   * int BRResult.GetInt(int resultId)
-//   * bool BRResult.GetBool(int resultId)
-//   * int BRResult.GetResponseId(int resultId)
-
-// For BRResponse (maybe just completely get rid of this):
-//   * int BRResponse.GetStatus(int responseId) ; if >= 300 then none of the other functions should be accessed
-//   * bool BRResponse.IsFromCache(int responseId)
-//   * string BRResponse.GetType(int responseId) ; may return things like "string" or "shop"
-//   * string BRResponse.GetString(int responseId) ; is this going to be needed?
-//	 * int BRResponse.GetShopId(int responseId) ; for a get_shop request
-//   * int BRResponse.GetInteriorRefListId(int responseId) ; for a get_interior_ref_list request
-//   * BRResponse.Drop()
-
-// The following will return values from a HashMap cache on the rust-side where entries are not evicted unless explicitly told to by papyrus.
-// These methods will panic if there isn't an entry in the cache for the id. This can happen if a request was not made beforehand and verified to be non-err result with a non-error response.
-// For BRShop
-//   * string BRShop.GetName(int shopId)
-//   * int BRShop.GetOwnerId(int shopId)
-//   * BRShop.Drop()
-
-// For BROwner
-//   * string BROwner.GetName(int ownerId)
-//   * BROwner.Drop()
-
-// Should split this up into GetInteriorRefList and LoadInteriorRefList.
-// Get: makes the request to the api and stores the Result in a rust cache, returns id of Result
-// Load: given id of interior ref list, gets the data from the rust cache, does the PlaceAtMe loop and returns an id of another Result
 bool LoadInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t interior_ref_list_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest)
 {
 	logger::info("Entered LoadInteriorRefListImpl");
@@ -219,16 +177,6 @@ bool LoadInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_ke
 	using func_t2 = decltype(&MoveTo);
 	REL::Relocation<func_t2> MoveTo_Native(RE::Offset::TESObjectREFR::MoveTo);
 	
-	// testing returning a script object
-	// RE::BSTSmartPointer<RE::BSScript::Object> ret = RE::BSTSmartPointer<RE::BSScript::Object>::BSTSmartPointer();
-	// a_vm->CreateObject(RE::BSFixedString("BRResult"), ret);
-	// RE::BSScript::Variable var = RE::BSScript::Variable::Variable(RE::BSScript::TypeInfo::TypeInfo(RE::BSScript::TypeInfo::RawType::kBool));
-	// var.SetBool(false);
-	// a_vm->SetPropertyValue(ret, "value", var);
-	// RE::BSScript::Variable ret_var = RE::BSScript::Variable::Variable(RE::BSScript::TypeInfo::TypeInfo(RE::BSScript::TypeInfo::RawType::kObject));
-	// ret_var.SetObject(ret);
-	// return ret_var;
-
 	RE::TESObjectCELL * cell = RE::TESObjectCELL::LookupByEditorID<RE::TESObjectCELL>("BREmpty");
 	logger::info(FMT_STRING("LoadInteriorRefList lookup cell override name: {} id: {:x}"), cell->GetName(), (uint32_t)cell->GetFormID());
 	if (!cell) {
@@ -236,7 +184,6 @@ bool LoadInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_ke
 		return false;
 	}
 
-	//RE::TESObjectREFR * x_marker = data_handler->LookupForm<RE::TESObjectREFR>(6628, "BazaarRealm.esp");
 	if (target_ref) {
 		FFIResult<RefRecordVec> result = get_interior_ref_list(api_url.c_str(), api_key.c_str(), interior_ref_list_id);
 
@@ -267,18 +214,6 @@ bool LoadInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_ke
 						game_ref = data_handler->LookupForm<RE::TESObjectREFR>(ref.ref_local_form_id, ref.ref_mod_name);
 						if (game_ref) {
 							logger::info(FMT_STRING("LoadInteriorRefList lookup ref name: {}, form_id: {:x}"), game_ref->GetName(), (uint32_t)game_ref->GetFormID());
-
-							// Failed experiment at trying to call the ObjectReference.Enable() papyrus native function
-							//RE::BSTSmartPointer<RE::BSScript::Object> object;
-							//RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor> callback = RE::BSTSmartPointer<RE::BSScript::IStackCallbackFunctor>::BSTSmartPointer(RE::BSScript::IStackCallbackFunctor());
-							//a_vm->CreateObject(RE::BSFixedString("ObjectReference"), game_ref, object);
-							//_MESSAGE("Created Object isConstructed: %d, isInitialized: %d, isValid: %d, type: %s", object->IsConstructed(), object->IsInitialized(), object->IsValid(), object->GetTypeInfo()->GetName());
-							//RE::BSTHashMap<RE::VMStackID, RE::BSTSmartPointer<RE::BSScript::Stack>> runningStacks = a_vm->allRunningStacks;
-							//_MESSAGE("allRunningStacks size: %d", runningStacks.size());
-							//for (auto entry = runningStacks.begin(); entry != runningStacks.end(); ++entry) {
-								//_MESSAGE("allRunningStacks %d", entry->first);
-							//}
-							//a_vm->DispatchMethodCall(object, RE::BSFixedString("Enable"), RE::MakeFunctionArguments<>(), RE::BSScript::IStackCallbackFunctor::IStackCallbackFunctor())
 						}
 						else {
 							logger::info(FMT_STRING("LoadInteriorRefList lookup ref not found, ref_mod_name: {}, ref_local_form_id: {:x}"), ref.ref_mod_name, ref.ref_local_form_id);
@@ -322,14 +257,6 @@ bool LoadInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_ke
 		return false;
 	}
 	
-	//RE::TESForm * gold = RE::TESForm::LookupByID(15);
-	//_MESSAGE("Gold form name: %s", gold->GetName());
-	//_MESSAGE("Gold form id: %d", gold->GetFormID());
-	//using func_t = decltype(&PlaceAtMe);
-	//REL::Offset<func_t> func{ REL::ID(55672) };
-	//RE::TESObjectREFR * new_ref = func(RE::BSScript::Internal::VirtualMachine::GetSingleton(), 1, player, gold, 50, false, false);
-	//_MESSAGE("New ref initially disabled: %d", new_ref->IsDisabled());
-	//_MESSAGE("New ref persistent: %d", new_ref->loadedData->flags & RE::TESObjectREFR::RecordFlags::kPersistent);
 	return true;
 }
 
@@ -345,8 +272,6 @@ bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::
 		return false;
 	}
 
-	// LoadInteriorRefListImpl(api_url, api_key, interior_ref_list_id, target_ref, quest);
-	// TODO: making this async causes a crash
 	std::thread thread(LoadInteriorRefListImpl, api_url, api_key, interior_ref_list_id, target_ref, quest);
 	thread.detach();
 	return true;
