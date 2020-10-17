@@ -1,10 +1,17 @@
 #include "bindings.h"
 
-void Init(RE::StaticFunctionTag*)
+bool Init(RE::StaticFunctionTag*)
 {
 	logger::info("Entered Init");
-	init();
-	logger::info("Init done");
+	bool result = init();
+	if (result) {
+		logger::info("Init successful");
+		return true;
+	}
+	else {
+		logger::error("Init failed");
+		return false;
+	}
 }
 
 std::string GenerateApiKey(RE::StaticFunctionTag*)
