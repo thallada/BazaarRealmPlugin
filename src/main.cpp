@@ -17,6 +17,7 @@ bool RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
 	a_vm->RegisterFunction("Create", "BRShop", CreateShop);
 	a_vm->RegisterFunction("Update", "BRShop", UpdateShop);
 	a_vm->RegisterFunction("Get", "BRShop", GetShop);
+	a_vm->RegisterFunction("List", "BRShop", ListShops);
 	a_vm->RegisterFunction("Create", "BRInteriorRefList", CreateInteriorRefList);
 	a_vm->RegisterFunction("ClearCell", "BRInteriorRefList", ClearCell);
 	a_vm->RegisterFunction("Load", "BRInteriorRefList", LoadInteriorRefList);
