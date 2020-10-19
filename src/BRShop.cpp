@@ -1,10 +1,9 @@
 #include "bindings.h"
 
-void CreateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BSFixedString name, RE::BSFixedString description, RE::TESQuest* quest)
-{
+void CreateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BSFixedString name, RE::BSFixedString description, RE::TESQuest* quest) {
 	logger::info("Entered CreateShopImpl");
 	if (!quest) {
-		logger::error("CreateShop quest is null!");
+		logger::error("CreateShopImpl quest is null!");
 		return;
 	}
 
@@ -13,19 +12,15 @@ void CreateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BS
 	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
 	failReg.Register(quest, RE::BSFixedString("OnCreateShopFail"));
 
-	logger::info(FMT_STRING("CreateShop api_url: {}"), api_url);
-	logger::info(FMT_STRING("CreateShop api_key: {}"), api_key);
-	logger::info(FMT_STRING("CreateShop name: {}"), name);
-	logger::info(FMT_STRING("CreateShop description: {}"), description);
-	FFIResult<ShopRecord> result = create_shop(api_url.c_str(), api_key.c_str(), name.c_str(), description.c_str());
+	logger::info(FMT_STRING("CreateShop api_url: {}, api_key: {}, name: {}, description: {}"), api_url, api_key, name, description);
+	FFIResult<RawShop> result = create_shop(api_url.c_str(), api_key.c_str(), name.c_str(), description.c_str());
 	if (result.IsOk()) {
-		ShopRecord shop = result.AsOk();
-		logger::info(FMT_STRING("CreateShop result Ok: {:d}"), shop.id);
+		RawShop shop = result.AsOk();
+		logger::info(FMT_STRING("CreateShop success: {}"), shop.id);
 		successReg.SendEvent(shop.id, RE::BSFixedString(shop.name), RE::BSFixedString(shop.description));
-	}
-	else {
+	} else {
 		const char* error = result.AsErr();
-		logger::error(FMT_STRING("CreateShop result Err: {}"), error);
+		logger::error(FMT_STRING("CreateShop failure: {}"), error);
 		failReg.SendEvent(RE::BSFixedString(error));
 	}
 	successReg.Unregister(quest);
@@ -44,11 +39,10 @@ bool CreateShop(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedSt
 	return true;
 }
 
-void UpdateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t id, RE::BSFixedString name, RE::BSFixedString description, RE::TESQuest* quest)
-{
+void UpdateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t id, RE::BSFixedString name, RE::BSFixedString description, RE::TESQuest* quest) {
 	logger::info("Entered UpdateShopImpl");
 	if (!quest) {
-		logger::error("UpdateShop quest is null!");
+		logger::error("UpdateShopImpl quest is null!");
 		return;
 	}
 
@@ -57,19 +51,15 @@ void UpdateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32
 	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
 	failReg.Register(quest, RE::BSFixedString("OnUpdateShopFail"));
 
-	logger::info(FMT_STRING("UpdateShop api_url: {}"), api_url);
-	logger::info(FMT_STRING("UpdateShop api_key: {}"), api_key);
-	logger::info(FMT_STRING("UpdateShop name: {}"), name);
-	logger::info(FMT_STRING("UpdateShop description: {}"), description);
-	FFIResult<ShopRecord> result = update_shop(api_url.c_str(), api_key.c_str(), id, name.c_str(), description.c_str());
+	logger::info(FMT_STRING("UpdateShop api_url: {}, api_key: {}, name: {}, description: {}"), api_url, api_key, name, description);
+	FFIResult<RawShop> result = update_shop(api_url.c_str(), api_key.c_str(), id, name.c_str(), description.c_str());
 	if (result.IsOk()) {
-		ShopRecord shop = result.AsOk();
-		logger::info(FMT_STRING("UpdateShop result Ok: {:d}"), shop.id);
+		RawShop shop = result.AsOk();
+		logger::info(FMT_STRING("UpdateShop success: {}"), shop.id);
 		successReg.SendEvent(shop.id, RE::BSFixedString(shop.name), RE::BSFixedString(shop.description));
-	}
-	else {
+	} else {
 		const char* error = result.AsErr();
-		logger::error(FMT_STRING("UpdateShop result Err: {}"), error);
+		logger::error(FMT_STRING("UpdateShop failure: {}"), error);
 		failReg.SendEvent(RE::BSFixedString(error));
 	}
 	successReg.Unregister(quest);
@@ -88,11 +78,10 @@ bool UpdateShop(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedSt
 	return true;
 }
 
-void GetShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t id, RE::TESQuest* quest)
-{
+void GetShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t id, RE::TESQuest* quest) {
 	logger::info("Entered GetShopImpl");
 	if (!quest) {
-		logger::error("GetShop quest is null!");
+		logger::error("GetShopImpl quest is null!");
 		return;
 	}
 
@@ -103,15 +92,14 @@ void GetShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t 
 
 	logger::info(FMT_STRING("GetShop api_url: {}"), api_url);
 	logger::info(FMT_STRING("GetShop api_key: {}"), api_key);
-	FFIResult<ShopRecord> result = get_shop(api_url.c_str(), api_key.c_str(), id);
+	FFIResult<RawShop> result = get_shop(api_url.c_str(), api_key.c_str(), id);
 	if (result.IsOk()) {
-		ShopRecord shop = result.AsOk();
-		logger::info(FMT_STRING("GetShop result Ok: {:d}"), shop.id);
+		RawShop shop = result.AsOk();
+		logger::info(FMT_STRING("GetShop success: {}"), shop.id);
 		successReg.SendEvent(shop.id, RE::BSFixedString(shop.name), RE::BSFixedString(shop.description));
-	}
-	else {
+	} else {
 		const char* error = result.AsErr();
-		logger::error(FMT_STRING("GetShop result Err: {}"), error);
+		logger::error(FMT_STRING("GetShop failure: {}"), error);
 		failReg.SendEvent(RE::BSFixedString(error));
 	}
 	successReg.Unregister(quest);

@@ -1,45 +1,50 @@
 #include "bindings.h"
 
-bool Init(RE::StaticFunctionTag*)
-{
+bool Init(RE::StaticFunctionTag*) {
 	logger::info("Entered Init");
 	bool result = init();
 	if (result) {
 		logger::info("Init successful");
 		return true;
-	}
-	else {
+	} else {
 		logger::error("Init failed");
 		return false;
 	}
 }
 
-std::string GenerateApiKey(RE::StaticFunctionTag*)
-{
+std::string GenerateApiKey(RE::StaticFunctionTag*) {
 	logger::info("Entered GenerateApiKey");
 	char *api_key = generate_api_key();
 	logger::info(FMT_STRING("GenerateApiKey api_key: {}"), api_key);
 	return api_key;
 }
 
-bool StatusCheckImpl(RE::BSFixedString api_url, RE::TESQuest* quest)
-{
+void StatusCheckImpl(RE::BSFixedString api_url, RE::TESQuest* quest) {
 	logger::info("Entered StatusCheckImpl");
 	if (!quest) {
 		logger::error("StatusCheck quest is null!");
-		return false;
+		return;
 	}
 
-
-	SKSE::RegistrationMap<bool> regMap = SKSE::RegistrationMap<bool>();
-	regMap.Register(quest, RE::BSFixedString("OnStatusCheck"));
+	SKSE::RegistrationMap<bool> successReg = SKSE::RegistrationMap<bool>();
+	successReg.Register(quest, RE::BSFixedString("OnStatusCheckSuccess"));
+	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	failReg.Register(quest, RE::BSFixedString("OnStatusCheckFail"));
 
 	logger::info(FMT_STRING("StatusCheck api_url: {}"), api_url);
-	bool result = status_check(api_url.c_str());
-	logger::info(FMT_STRING("StatusCheck result: {}"), result ? "true" : "false");
-	regMap.SendEvent(result);
-	regMap.Unregister(quest);
-	return result;
+	FFIResult<bool> result = status_check(api_url.c_str());
+	if (result.IsOk()) {
+		bool success = result.AsOk();
+		logger::info(FMT_STRING("StatusCheck success: {}"), success);
+		successReg.SendEvent(success);
+	} else {
+		const char* error = result.AsErr();
+		logger::error(FMT_STRING("StatusCheck failure: {}"), error);
+		failReg.SendEvent(RE::BSFixedString(error));
+	}
+	successReg.Unregister(quest);
+	failReg.Unregister(quest);
+	return;
 }
 
 bool StatusCheck(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::TESQuest* quest) {
