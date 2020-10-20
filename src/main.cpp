@@ -21,6 +21,7 @@ bool RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
 	a_vm->RegisterFunction("Create", "BRInteriorRefList", CreateInteriorRefList);
 	a_vm->RegisterFunction("ClearCell", "BRInteriorRefList", ClearCell);
 	a_vm->RegisterFunction("Load", "BRInteriorRefList", LoadInteriorRefList);
+	a_vm->RegisterFunction("LoadByShopId", "BRInteriorRefList", LoadInteriorRefListByShopId);
 	a_vm->RegisterFunction("Toggle", "BRMerchandiseList", ToggleMerchandise);
 	a_vm->RegisterFunction("NextPage", "BRMerchandiseList", LoadNextMerchandise);
 	a_vm->RegisterFunction("PrevPage", "BRMerchandiseList", LoadPrevMerchandise);
