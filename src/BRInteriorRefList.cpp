@@ -292,7 +292,7 @@ bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::
 void LoadInteriorRefListByShopIdImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
 	logger::info("Entered LoadInteriorRefListByShopIdImpl");
 
-	LoadRefsImpl(get_latest_interior_ref_list_by_shop_id(api_url.c_str(), api_key.c_str(), shop_id), target_ref, quest);
+	LoadRefsImpl(get_interior_ref_list_by_shop_id(api_url.c_str(), api_key.c_str(), shop_id), target_ref, quest);
 }
 
 bool LoadInteriorRefListByShopId(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {

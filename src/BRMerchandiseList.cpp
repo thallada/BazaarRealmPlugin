@@ -76,14 +76,6 @@ void LoadMerchandiseImpl(
 	logger::info("Entered LoadMerchandiseImpl");
 	logger::info(FMT_STRING("LoadMerchandise page: {:d}"), page);
 	
-	RE::TESDataHandler * data_handler = RE::TESDataHandler::GetSingleton();
-	RE::BSScript::Internal::VirtualMachine * a_vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
-	using func_t = decltype(&PlaceAtMe);
-	REL::Relocation<func_t> PlaceAtMe_Native{ REL::ID(55672) };
-	using func_t2 = decltype(&MoveTo);
-	REL::Relocation<func_t2> MoveTo_Native(RE::Offset::TESObjectREFR::MoveTo);
-	REL::ID extra_linked_ref_vtbl(static_cast<std::uint64_t>(229564));
-
 	if (!merchant_shelf) {
 		logger::error("LoadMerchandise merchant_shelf is null!");
 		return;
@@ -106,7 +98,15 @@ void LoadMerchandiseImpl(
 
 	// Placing the refs must be done on the main thread otherwise disabling & deleting refs in ClearMerchandiseImpl causes a crash
 	auto task = SKSE::GetTaskInterface();
-	task->AddTask([result, merchant_chest, merchant_shelf, placeholder_static, shelf_keyword, item_keyword, prev_keyword, next_keyword, page, toggle_ref, cell, data_handler, a_vm, extra_linked_ref_vtbl, MoveTo_Native, PlaceAtMe_Native]() {
+	task->AddTask([result, merchant_chest, merchant_shelf, placeholder_static, shelf_keyword, item_keyword, prev_keyword, next_keyword, page, toggle_ref, cell]() {
+		RE::TESDataHandler * data_handler = RE::TESDataHandler::GetSingleton();
+		RE::BSScript::Internal::VirtualMachine * a_vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
+		using func_t = decltype(&PlaceAtMe);
+		REL::Relocation<func_t> PlaceAtMe_Native{ REL::ID(55672) };
+		using func_t2 = decltype(&MoveTo);
+		REL::Relocation<func_t2> MoveTo_Native(RE::Offset::TESObjectREFR::MoveTo);
+		REL::ID extra_linked_ref_vtbl(static_cast<std::uint64_t>(229564));
+
 		// Since this method is running asyncronously in a thread, set up a callback on the trigger ref that will receive an event with the result
 		SKSE::RegistrationMap<bool> successReg = SKSE::RegistrationMap<bool>();
 		successReg.Register(toggle_ref, RE::BSFixedString("OnLoadMerchandiseSuccess"));
