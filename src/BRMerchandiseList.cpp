@@ -2,14 +2,13 @@
 
 #include "NativeFunctions.h"
 
-// TODO: should I replace "placeholder" with "buy_activator" and "ref" with "item_ref"?
-bool ClearMerchandiseImpl(RE::TESObjectREFR* merchant_chest, RE::TESObjectREFR* merchant_shelf, RE::TESForm* placeholder_static, RE::BGSKeyword * shelf_keyword, RE::BGSKeyword * item_keyword)
+bool ClearMerchandiseImpl(RE::TESObjectREFR* merchant_chest, RE::TESObjectREFR* merchant_shelf, RE::TESForm* activator_static, RE::BGSKeyword* shelf_keyword, RE::BGSKeyword* item_keyword, RE::BGSKeyword* activator_keyword)
 {
 	logger::info("Entered ClearMerchandiseImpl");
 
 	if (merchant_chest && merchant_shelf) {
 		RE::TESObjectCELL * cell = merchant_shelf->GetParentCell();
-		RE::FormID placeholder_form_id = placeholder_static->GetFormID();
+		RE::FormID activator_form_id = activator_static->GetFormID();
 		RE::FormID shelf_form_id = merchant_shelf->GetFormID();
 		for (auto entry = cell->references.begin(); entry != cell->references.end();)
 		{
@@ -18,19 +17,19 @@ bool ClearMerchandiseImpl(RE::TESObjectREFR* merchant_chest, RE::TESObjectREFR* 
 			RE::TESBoundObject * base = ref->GetBaseObject();
 			if (base) {
 				RE::FormID form_id = base->GetFormID();
-				if (form_id == placeholder_form_id) {
-					logger::info("ClearMerchandise found placeholder ref");
+				if (form_id == activator_form_id) {
+					logger::info("ClearMerchandise found activator ref");
 					RE::TESObjectREFR * shelf_linked_ref = ref->GetLinkedRef(shelf_keyword);
 					if (shelf_linked_ref && shelf_linked_ref->GetFormID() == shelf_form_id) {
-						logger::info("ClearMerchandise placeholder ref is linked with cleared shelf");
+						logger::info("ClearMerchandise activator ref is linked with cleared shelf");
 						RE::TESObjectREFR * linked_ref = ref->GetLinkedRef(item_keyword);
 						if (linked_ref) {
-							logger::info(FMT_STRING("ClearMerchandise deleting ref linked to placeholder ref: {:x}"), (uint32_t)linked_ref->GetFormID());
+							logger::info(FMT_STRING("ClearMerchandise deleting ref linked to activator ref: {:x}"), (uint32_t)linked_ref->GetFormID());
 							// TODO: should I use the MemoryManager to free these references?
 							linked_ref->Disable(); // disabling first is required to prevent CTD on unloading cell
 							linked_ref->SetDelete(true);
 						}
-						logger::info(FMT_STRING("ClearMerchandise deleting existing placeholder ref: {:x}"), (uint32_t)ref->GetFormID());
+						logger::info(FMT_STRING("ClearMerchandise deleting existing activator ref: {:x}"), (uint32_t)ref->GetFormID());
 						ref->Disable(); // disabling first is required to prevent CTD on unloading cell
 						ref->SetDelete(true);
 						cell->references.erase(*entry++); // prevents slowdowns after many runs of ClearMerchandise
@@ -59,46 +58,33 @@ bool ClearMerchandiseImpl(RE::TESObjectREFR* merchant_chest, RE::TESObjectREFR* 
 	return true;
 }
 
-void LoadMerchandiseImpl(
-	RE::BSFixedString api_url,
-	RE::BSFixedString api_key,
-	uint32_t merchandise_list_id,
+void LoadMerchTask(
+	FFIResult<RawMerchandiseVec> result,
 	RE::TESObjectREFR* merchant_shelf,
-	RE::TESForm* placeholder_static,
+	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
 	RE::BGSKeyword* chest_keyword,
 	RE::BGSKeyword* item_keyword,
+	RE::BGSKeyword* activator_keyword,
 	RE::BGSKeyword* toggle_keyword,
 	RE::BGSKeyword* next_keyword,
 	RE::BGSKeyword* prev_keyword,
 	int page
 ) {
-	logger::info("Entered LoadMerchandiseImpl");
-	logger::info(FMT_STRING("LoadMerchandise page: {:d}"), page);
-	
 	if (!merchant_shelf) {
-		logger::error("LoadMerchandise merchant_shelf is null!");
+		logger::error("LoadMerchTask merchant_shelf is null!");
 		return;
 	}
-	RE::TESObjectCELL * cell = merchant_shelf->GetParentCell();
 
 	RE::TESObjectREFR * toggle_ref = merchant_shelf->GetLinkedRef(toggle_keyword);
 	if (!toggle_ref) {
-		logger::error("LoadMerchandise toggle_ref is null!");
+		logger::error("LoadMerchTask toggle_ref is null!");
 		return;
 	}
-
-	RE::TESObjectREFR * merchant_chest = merchant_shelf->GetLinkedRef(chest_keyword);
-	if (!merchant_chest) {
-		logger::error("LoadMerchandise merchant_chest is null!");
-		return;
-	}
-
-	FFIResult<RawMerchandiseVec> result = get_merchandise_list(api_url.c_str(), api_key.c_str(), merchandise_list_id);
 
 	// Placing the refs must be done on the main thread otherwise disabling & deleting refs in ClearMerchandiseImpl causes a crash
 	auto task = SKSE::GetTaskInterface();
-	task->AddTask([result, merchant_chest, merchant_shelf, placeholder_static, shelf_keyword, item_keyword, prev_keyword, next_keyword, page, toggle_ref, cell]() {
+	task->AddTask([result, merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, prev_keyword, next_keyword, page, toggle_ref]() {
 		RE::TESDataHandler * data_handler = RE::TESDataHandler::GetSingleton();
 		RE::BSScript::Internal::VirtualMachine * a_vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
 		using func_t = decltype(&PlaceAtMe);
@@ -113,11 +99,21 @@ void LoadMerchandiseImpl(
 		SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
 		failReg.Register(toggle_ref, RE::BSFixedString("OnLoadMerchandiseFail"));
 
+		RE::TESObjectREFR * merchant_chest = merchant_shelf->GetLinkedRef(chest_keyword);
+		if (!merchant_chest) {
+			logger::error("LoadMerchTask merchant_chest is null!");
+			failReg.SendEvent("Merchant chest reference is null");
+			successReg.Unregister(toggle_ref);
+			failReg.Unregister(toggle_ref);
+			return;
+		}
+		RE::TESObjectCELL * cell = merchant_shelf->GetParentCell();
+
 		if (result.IsOk()) {
 			logger::info("LoadMerchandise get_merchandise_list result OK");
 			RawMerchandiseVec vec = result.AsOk();
 			logger::info(FMT_STRING("LoadMerchandise vec len: {:d}, cap: {:d}"), vec.len, vec.cap);
-			int max_page = std::ceil((float)(vec.len - 1) / (float)9);
+			int max_page = std::ceil((float)(vec.len) / (float)9);
 
 			if (vec.len > 0 && page > max_page) {
 				logger::info(FMT_STRING("LoadMerchandise page {:d} is greater than max_page {:d}, doing nothing"), page, max_page);
@@ -127,7 +123,7 @@ void LoadMerchandiseImpl(
 				return;
 			}
 
-			if (!ClearMerchandiseImpl(merchant_chest, merchant_shelf, placeholder_static, shelf_keyword, item_keyword)) {
+			if (!ClearMerchandiseImpl(merchant_chest, merchant_shelf, activator_static, shelf_keyword, item_keyword, activator_keyword)) {
 				logger::error("LoadMerchandise ClearMerchandiseImpl returned a fail code");
 				failReg.SendEvent(RE::BSFixedString("Failed to clear existing merchandise from shelf"));
 				successReg.Unregister(toggle_ref);
@@ -159,20 +155,23 @@ void LoadMerchandiseImpl(
 				uint16_t bound_z = boundMax.z > boundMin.z ? boundMax.z - boundMin.z : boundMin.z - boundMax.z;
 				logger::info(FMT_STRING("LoadMerchandise ref bounds width: {:d}, length: {:d}, height: {:d}"), bound_x, bound_y, bound_z);
 
-				RE::TESObjectREFR * placeholder_ref = PlaceAtMe_Native(a_vm, 0, merchant_shelf, placeholder_static, 1, false, false);
+				RE::TESObjectREFR * activator_ref = PlaceAtMe_Native(a_vm, 0, merchant_shelf, activator_static, 1, false, false);
 
 				RE::NiPoint3 bound_min = ref->GetBoundMin();
 				RE::NiPoint3 bound_max = ref->GetBoundMax();
 				logger::info(FMT_STRING("LoadMerchandise ref bounds min: {:.2f} {:.2f} {:.2f}, max: {:.2f} {:.2f} {:.2f}"), bound_min.x, bound_min.y, bound_min.z, bound_max.x, bound_max.y, bound_max.z);
 
-				RE::ExtraLinkedRef * extra_linked_ref = (RE::ExtraLinkedRef*)RE::BSExtraData::Create(sizeof(RE::ExtraLinkedRef), extra_linked_ref_vtbl.address());
-				extra_linked_ref->linkedRefs.push_back({shelf_keyword, merchant_shelf});
-				placeholder_ref->extraList.Add(extra_linked_ref);
+				RE::ExtraLinkedRef * activator_extra_linked_ref = (RE::ExtraLinkedRef*)RE::BSExtraData::Create(sizeof(RE::ExtraLinkedRef), extra_linked_ref_vtbl.address());
+				activator_extra_linked_ref->linkedRefs.push_back({shelf_keyword, merchant_shelf});
+				activator_ref->extraList.Add(activator_extra_linked_ref);
 
-				// This extra count stored on the placeholder_ref indicates the quanity of the merchandise item it is linked to
+				RE::ExtraLinkedRef * item_extra_linked_ref = (RE::ExtraLinkedRef*)RE::BSExtraData::Create(sizeof(RE::ExtraLinkedRef), extra_linked_ref_vtbl.address());
+				ref->extraList.Add(item_extra_linked_ref);
+
+				// This extra count stored on the activator_ref indicates the quanity of the merchandise item it is linked to
 				RE::ExtraCount * extra_page_num = (RE::ExtraCount*)RE::BSExtraData::Create(sizeof(RE::ExtraCount), RE::Offset::ExtraCount::Vtbl.address());
 				extra_page_num->count = merch.quantity;
-				placeholder_ref->extraList.Add(extra_page_num);
+				activator_ref->extraList.Add(extra_page_num);
 
 				float scale = 1;
 				int max_over_bound = 0;
@@ -189,7 +188,7 @@ void LoadMerchandiseImpl(
 					scale = ((float)34 / (float)(max_over_bound + 34)) * (float)100;
 					logger::info(FMT_STRING("LoadMerchandise new scale: {:.2f} {:d} (max_over_bound: {:d}"), scale, static_cast<uint16_t>(scale), max_over_bound);
 					ref->refScale = static_cast<uint16_t>(scale);
-					placeholder_ref->refScale = static_cast<uint16_t>(scale);
+					activator_ref->refScale = static_cast<uint16_t>(scale);
 				}
 
 				RE::NiPoint3 shelf_position = merchant_shelf->data.location;
@@ -205,30 +204,31 @@ void LoadMerchandiseImpl(
 				}
 				// TODO: make page size and buy_activator positions configurable per "shelf" type (where is config stored?)
 				if (i % 9 == 0) {
-					ref_position = RE::NiPoint3(shelf_position.x + 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 110 + z_imbalance);
+					ref_position = RE::NiPoint3(shelf_position.x + (-40 * cos(shelf_angle.z)) - (110 * cos(shelf_angle.x) * sin(shelf_angle.z)) + x_imbalance, shelf_position.y + (40 * sin(shelf_angle.z)) - (110 * sin(shelf_angle.x) * cos(shelf_angle.z)) + y_imbalance, shelf_position.z + (110 * cos(shelf_angle.x)) + z_imbalance);
 				} else if (i % 9 == 1) {
 					ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 110 + z_imbalance);
 				} else if (i % 9 == 2) {
-					ref_position = RE::NiPoint3(shelf_position.x - 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 110 + z_imbalance);
+					ref_position = RE::NiPoint3(shelf_position.x + (40 * cos(shelf_angle.z)) + x_imbalance, shelf_position.y + (-40 * sin(shelf_angle.z)) + y_imbalance, shelf_position.z + 110 + z_imbalance);
 				} else if (i % 9 == 3) {
-					ref_position = RE::NiPoint3(shelf_position.x + 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 65 + z_imbalance);
+					ref_position = RE::NiPoint3(shelf_position.x + (-40 * cos(shelf_angle.z)) + x_imbalance, shelf_position.y + (40 * sin(shelf_angle.z)) + y_imbalance, shelf_position.z + 65 + z_imbalance);
 				} else if (i % 9 == 4) {
 					ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 65 + z_imbalance);
 				} else if (i % 9 == 5) {
-					ref_position = RE::NiPoint3(shelf_position.x - 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 65 + z_imbalance);
+					ref_position = RE::NiPoint3(shelf_position.x + (40 * cos(shelf_angle.z)) + x_imbalance, shelf_position.y + (-40 * sin(shelf_angle.z)) + y_imbalance, shelf_position.z + 65 + z_imbalance);
 				} else if (i % 9 == 6) {
-					ref_position = RE::NiPoint3(shelf_position.x + 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
+					ref_position = RE::NiPoint3(shelf_position.x + (-40 * cos(shelf_angle.z)) + x_imbalance, shelf_position.y + (40 * sin(shelf_angle.z)) + y_imbalance, shelf_position.z + 20 + z_imbalance);
 				} else if (i % 9 == 7) {
 					ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
 				} else if (i % 9 == 8) {
-					ref_position = RE::NiPoint3(shelf_position.x - 40 + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
+					ref_position = RE::NiPoint3(shelf_position.x + (40 * cos(shelf_angle.z)) + x_imbalance, shelf_position.y + (-40 * sin(shelf_angle.z)) + y_imbalance, shelf_position.z + 20 + z_imbalance);
 				}
 				MoveTo_Native(ref, ref->CreateRefHandle(), cell, cell->worldSpace, ref_position - RE::NiPoint3(10000, 10000, 10000), ref_angle);
-				MoveTo_Native(placeholder_ref, placeholder_ref->CreateRefHandle(), cell, cell->worldSpace, ref_position, ref_angle);
+				MoveTo_Native(activator_ref, ref->CreateRefHandle(), cell, cell->worldSpace, ref_position, ref_angle);
 				RE::BSFixedString name = RE::BSFixedString::BSFixedString(ref->GetName());
-				placeholder_ref->SetDisplayName(name, true);
-				placeholder_ref->extraList.SetOwner(base); // I'm abusing "owner" to link the activator with the Form that should be bought once activated
-				extra_linked_ref->linkedRefs.push_back({item_keyword, ref});
+				activator_ref->SetDisplayName(name, true);
+				activator_ref->extraList.SetOwner(base); // I'm abusing "owner" to link the activator with the Form that should be bought once activated
+				activator_extra_linked_ref->linkedRefs.push_back({item_keyword, ref});
+				item_extra_linked_ref->linkedRefs.push_back({activator_keyword, activator_ref});
 			}
 
 			// I'm abusing the ExtraCount ExtraData type for storing the current page number state of the shelf
@@ -291,16 +291,59 @@ void LoadMerchandiseImpl(
 	});
 }
 
-bool ToggleMerchandise(
-	RE::StaticFunctionTag*,
+void LoadMerchandiseImpl(
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
 	uint32_t merchandise_list_id,
 	RE::TESObjectREFR* merchant_shelf,
-	RE::TESForm* placeholder_static,
+	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
 	RE::BGSKeyword* chest_keyword,
 	RE::BGSKeyword* item_keyword,
+	RE::BGSKeyword* activator_keyword,
+	RE::BGSKeyword* toggle_keyword,
+	RE::BGSKeyword* next_keyword,
+	RE::BGSKeyword* prev_keyword,
+	int page
+) {
+	logger::info("Entered LoadMerchandiseImpl");
+	logger::info(FMT_STRING("LoadMerchandise page: {:d}"), page);
+
+	LoadMerchTask(get_merchandise_list(api_url.c_str(), api_key.c_str(), merchandise_list_id), merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+}
+
+void LoadMerchandiseByShopIdImpl(
+	RE::BSFixedString api_url,
+	RE::BSFixedString api_key,
+	uint32_t shop_id,
+	RE::TESObjectREFR* merchant_shelf,
+	RE::TESForm* activator_static,
+	RE::BGSKeyword* shelf_keyword,
+	RE::BGSKeyword* chest_keyword,
+	RE::BGSKeyword* item_keyword,
+	RE::BGSKeyword* activator_keyword,
+	RE::BGSKeyword* toggle_keyword,
+	RE::BGSKeyword* next_keyword,
+	RE::BGSKeyword* prev_keyword,
+	int page
+) {
+	logger::info("Entered LoadMerchandiseByShopIdImpl");
+	logger::info(FMT_STRING("LoadMerchandiseByShopIdImpl page: {:d}"), page);
+
+	LoadMerchTask(get_merchandise_list_by_shop_id(api_url.c_str(), api_key.c_str(), shop_id), merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+}
+
+bool ToggleMerchandise(
+	RE::StaticFunctionTag*,
+	RE::BSFixedString api_url,
+	RE::BSFixedString api_key,
+	uint32_t shop_id,
+	RE::TESObjectREFR* merchant_shelf,
+	RE::TESForm* activator_static,
+	RE::BGSKeyword* shelf_keyword,
+	RE::BGSKeyword* chest_keyword,
+	RE::BGSKeyword* item_keyword,
+	RE::BGSKeyword* activator_keyword,
 	RE::BGSKeyword* toggle_keyword,
 	RE::BGSKeyword* next_keyword,
 	RE::BGSKeyword* prev_keyword
@@ -316,7 +359,7 @@ bool ToggleMerchandise(
 	if (extra_is_loaded) {
 		// Clear merchandise
 		RE::TESObjectREFR * merchant_chest = merchant_shelf->GetLinkedRef(chest_keyword);
-		if (!ClearMerchandiseImpl(merchant_chest, merchant_shelf, placeholder_static, shelf_keyword, item_keyword)) {
+		if (!ClearMerchandiseImpl(merchant_chest, merchant_shelf, activator_static, shelf_keyword, item_keyword, activator_keyword)) {
 			return false;
 		}
 
@@ -346,7 +389,7 @@ bool ToggleMerchandise(
 	} else {
 		// Load merchandise
 		int page = merchant_shelf->extraList.GetCount();
-		std::thread thread(LoadMerchandiseImpl, api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+		std::thread thread(LoadMerchandiseByShopIdImpl, api_url, api_key, shop_id, merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, toggle_keyword, next_keyword, prev_keyword, page);
 		thread.detach();
 		return true;
 	}
@@ -356,12 +399,13 @@ bool LoadNextMerchandise(
 	RE::StaticFunctionTag*,
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
-	uint32_t merchandise_list_id,
+	uint32_t shop_id,
 	RE::TESObjectREFR* merchant_shelf,
-	RE::TESForm* placeholder_static,
+	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
 	RE::BGSKeyword* chest_keyword,
 	RE::BGSKeyword* item_keyword,
+	RE::BGSKeyword* activator_keyword,
 	RE::BGSKeyword* toggle_keyword,
 	RE::BGSKeyword* next_keyword,
 	RE::BGSKeyword* prev_keyword
@@ -378,7 +422,7 @@ bool LoadNextMerchandise(
 		page = page + 1;
 	}
 
-	std::thread thread(LoadMerchandiseImpl, api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+	std::thread thread(LoadMerchandiseByShopIdImpl, api_url, api_key, shop_id, merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, toggle_keyword, next_keyword, prev_keyword, page);
 	thread.detach();
 	return true;
 }
@@ -387,12 +431,13 @@ bool LoadPrevMerchandise(
 	RE::StaticFunctionTag*,
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
-	uint32_t merchandise_list_id,
+	uint32_t shop_id,
 	RE::TESObjectREFR* merchant_shelf,
-	RE::TESForm* placeholder_static,
+	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
 	RE::BGSKeyword* chest_keyword,
 	RE::BGSKeyword* item_keyword,
+	RE::BGSKeyword* activator_keyword,
 	RE::BGSKeyword* toggle_keyword,
 	RE::BGSKeyword* next_keyword,
 	RE::BGSKeyword* prev_keyword
@@ -413,12 +458,46 @@ bool LoadPrevMerchandise(
 		page = page - 1;
 	}
 	
-	std::thread thread(LoadMerchandiseImpl, api_url, api_key, merchandise_list_id, merchant_shelf, placeholder_static, shelf_keyword, chest_keyword, item_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+	std::thread thread(LoadMerchandiseByShopIdImpl, api_url, api_key, shop_id, merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, toggle_keyword, next_keyword, prev_keyword, page);
 	thread.detach();
 	return true;
 }
 
-bool ReplaceMerch3D(RE::StaticFunctionTag*, RE::TESObjectREFR* merchant_shelf, RE::TESForm* placeholder_static, RE::BGSKeyword* shelf_keyword, RE::BGSKeyword* item_keyword) {
+bool LoadMerchandiseByShopId(
+	RE::StaticFunctionTag*,
+	RE::BSFixedString api_url,
+	RE::BSFixedString api_key,
+	uint32_t shop_id,
+	RE::TESObjectREFR* merchant_shelf,
+	RE::TESForm* activator_static,
+	RE::BGSKeyword* shelf_keyword,
+	RE::BGSKeyword* chest_keyword,
+	RE::BGSKeyword* item_keyword,
+	RE::BGSKeyword* activator_keyword,
+	RE::BGSKeyword* toggle_keyword,
+	RE::BGSKeyword* next_keyword,
+	RE::BGSKeyword* prev_keyword
+) {
+	if (!merchant_shelf) {
+		logger::error("LoadMerchandiseByShopId merchant_shelf is null!");
+		return false;
+	}
+	// I'm abusing the ExtraCannotWear ExtraData type as a boolean marker which stores whether the shelf is in a loaded or cleared state
+	// The presense of ExtraCannotWear == loaded, its absence == cleared
+	// Please don't try to wear the shelves :)
+	RE::ExtraCannotWear * extra_is_loaded = merchant_shelf->extraList.GetByType<RE::ExtraCannotWear>();
+	if (!extra_is_loaded) {
+		// Load merchandise
+		int page = merchant_shelf->extraList.GetCount();
+		std::thread thread(LoadMerchandiseByShopIdImpl, api_url, api_key, shop_id, merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, toggle_keyword, next_keyword, prev_keyword, page);
+		thread.detach();
+		return true;
+	} else {
+		logger::warn("LoadMerchandiseByShopId merchant shelf is marked as already loaded, not doing anything.");
+	}
+}
+
+bool ReplaceMerch3D(RE::StaticFunctionTag*, RE::TESObjectREFR* merchant_shelf, RE::TESForm* activator_static, RE::BGSKeyword* shelf_keyword, RE::BGSKeyword* item_keyword) {
 	logger::info("Entered ReplaceMerch3D");
 
 	if (!merchant_shelf) {
@@ -426,22 +505,22 @@ bool ReplaceMerch3D(RE::StaticFunctionTag*, RE::TESObjectREFR* merchant_shelf, R
 		return false;
 	}
 	RE::TESObjectCELL * cell = merchant_shelf->GetParentCell();
-	RE::FormID placeholder_form_id = placeholder_static->GetFormID();
+	RE::FormID activator_form_id = activator_static->GetFormID();
 	RE::FormID shelf_form_id = merchant_shelf->GetFormID();
 	for (auto entry = cell->references.begin(); entry != cell->references.end(); ++entry) {
 		RE::TESObjectREFR * ref = (*entry).get();
 		RE::TESBoundObject * base = ref->GetBaseObject();
 		if (base) {
-			if (base->GetFormID() == placeholder_form_id) {
-				logger::info(FMT_STRING("ReplaceMerch3D REF is a placeholder ref: {:x}"), (uint32_t)ref->GetFormID());
+			if (base->GetFormID() == activator_form_id) {
+				logger::info(FMT_STRING("ReplaceMerch3D REF is a activator ref: {:x}"), (uint32_t)ref->GetFormID());
 				RE::TESObjectREFR * shelf_linked_ref = ref->GetLinkedRef(shelf_keyword);
 				if (shelf_linked_ref && shelf_linked_ref->GetFormID() == shelf_form_id) {
-					logger::info("ReplaceMerch3D placeholder ref is linked with loaded shelf");
+					logger::info("ReplaceMerch3D activator ref is linked with loaded shelf");
 					RE::TESObjectREFR * linked_ref = ref->GetLinkedRef(item_keyword);
 					if (linked_ref) {
-						logger::info(FMT_STRING("ReplaceMerch3D placeholder has linked item ref: {:x}"), (uint32_t)linked_ref->GetFormID());
+						logger::info(FMT_STRING("ReplaceMerch3D activator has linked item ref: {:x}"), (uint32_t)linked_ref->GetFormID());
 						if (linked_ref->Is3DLoaded()) {
-							logger::info("ReplaceMerch3D replaceing placeholder 3D with linked item 3D");
+							logger::info("ReplaceMerch3D replacing activator 3D with linked item 3D");
 							ref->Set3D(linked_ref->GetCurrent3D());
 						} else {
 							logger::info("ReplaceMerch3D linked item ref 3D is not loaded yet, returning false");
@@ -457,12 +536,12 @@ bool ReplaceMerch3D(RE::StaticFunctionTag*, RE::TESObjectREFR* merchant_shelf, R
 	return true;
 }
 
-RE::TESForm * BuyMerchandise(RE::StaticFunctionTag*, RE::TESObjectREFR * merchandise_placeholder) {
+RE::TESForm * BuyMerchandise(RE::StaticFunctionTag*, RE::TESObjectREFR * merchandise_activator) {
 	logger::info("Entered BuyMerchandise");
-	logger::info(FMT_STRING("BuyMerchandise activated ref: {}"), merchandise_placeholder->GetName());
-	RE::TESForm * owner = merchandise_placeholder->GetOwner();
+	logger::info(FMT_STRING("BuyMerchandise activated ref: {}"), merchandise_activator->GetName());
+	RE::TESForm * owner = merchandise_activator->GetOwner();
 	logger::info(FMT_STRING("BuyMerchandise owner: {}"), owner->GetName());
-	logger::info(FMT_STRING("BuyMerchandise count: {:d}"), merchandise_placeholder->extraList.GetCount());
+	logger::info(FMT_STRING("BuyMerchandise count: {:d}"), merchandise_activator->extraList.GetCount());
 	// TODO: do add item here
 	return owner;
 }
@@ -556,7 +635,7 @@ void CreateMerchandiseListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 		count++;
 	}
 
-	FFIResult<int32_t> result = create_merchandise_list(api_url.c_str(), api_key.c_str(), shop_id, &merch_records[0], merch_records.size());
+	FFIResult<int32_t> result = update_merchandise_list(api_url.c_str(), api_key.c_str(), shop_id, &merch_records[0], merch_records.size());
 	if (result.IsOk()) {
 		int32_t merchandise_list_id = result.AsOk();
 		logger::info(FMT_STRING("CreateMerchandiseList success: {}"), merchandise_list_id);

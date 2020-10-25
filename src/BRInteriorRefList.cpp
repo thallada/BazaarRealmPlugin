@@ -93,7 +93,7 @@ void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 		}
 	}
 
-	FFIResult<int32_t> result = create_interior_ref_list(api_url.c_str(), api_key.c_str(), shop_id, &raw_interior_refs[0], raw_interior_refs.size());
+	FFIResult<int32_t> result = update_interior_ref_list(api_url.c_str(), api_key.c_str(), shop_id, &raw_interior_refs[0], raw_interior_refs.size());
 	if (result.IsOk()) {
 		int32_t interior_ref_list_id = result.AsOk();
 		logger::info(FMT_STRING("CreateInteriorRefList success: {}"), interior_ref_list_id);
@@ -164,11 +164,11 @@ bool ClearCell(RE::StaticFunctionTag*) {
 	return true;
 }
 
-void LoadRefsImpl(FFIResult<RawInteriorRefVec> result, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
-	logger::info("Entered LoadRefsImpl");
+void LoadRefsTask(FFIResult<RawInteriorRefVec> result, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
+	logger::info("Entered LoadRefsTask");
 
 	if (!quest) {
-		logger::error("LoadRefsImpl quest is null!");
+		logger::error("LoadRefsTask quest is null!");
 		return;
 	}
 
@@ -188,7 +188,7 @@ void LoadRefsImpl(FFIResult<RawInteriorRefVec> result, RE::TESObjectREFR* target
 		failReg.Register(quest, RE::BSFixedString("OnLoadInteriorRefListFail"));
 
 		if (!target_ref) {
-			logger::error("LoadRefsImpl target_ref is null!");
+			logger::error("LoadRefsTask target_ref is null!");
 			failReg.SendEvent("Spawn target reference is null");
 			successReg.Unregister(quest);
 			failReg.Unregister(quest);
@@ -198,7 +198,7 @@ void LoadRefsImpl(FFIResult<RawInteriorRefVec> result, RE::TESObjectREFR* target
 		RE::TESObjectCELL * cell = RE::TESObjectCELL::LookupByEditorID<RE::TESObjectCELL>("BREmpty");
 		logger::info(FMT_STRING("LoadRefsImpl lookup cell override name: {} id: {:x}"), cell->GetName(), (uint32_t)cell->GetFormID());
 		if (!cell) {
-			logger::error("LoadRefsImpl cell is null!");
+			logger::error("LoadRefsTask cell is null!");
 			failReg.SendEvent("Lookup failed for the shop Cell: BREmpty");
 			successReg.Unregister(quest);
 			failReg.Unregister(quest);
@@ -269,7 +269,7 @@ void LoadRefsImpl(FFIResult<RawInteriorRefVec> result, RE::TESObjectREFR* target
 void LoadInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t interior_ref_list_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
 	logger::info("Entered LoadInteriorRefListImpl");
 
-	LoadRefsImpl(get_interior_ref_list(api_url.c_str(), api_key.c_str(), interior_ref_list_id), target_ref, quest);
+	LoadRefsTask(get_interior_ref_list(api_url.c_str(), api_key.c_str(), interior_ref_list_id), target_ref, quest);
 }
 
 bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t interior_ref_list_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
@@ -292,7 +292,7 @@ bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::
 void LoadInteriorRefListByShopIdImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
 	logger::info("Entered LoadInteriorRefListByShopIdImpl");
 
-	LoadRefsImpl(get_interior_ref_list_by_shop_id(api_url.c_str(), api_key.c_str(), shop_id), target_ref, quest);
+	LoadRefsTask(get_interior_ref_list_by_shop_id(api_url.c_str(), api_key.c_str(), shop_id), target_ref, quest);
 }
 
 bool LoadInteriorRefListByShopId(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
