@@ -58,6 +58,28 @@ bool ClearMerchandiseImpl(RE::TESObjectREFR* merchant_chest, RE::TESObjectREFR* 
 	return true;
 }
 
+RE::NiMatrix3 get_rotation_matrix(RE::NiPoint3 rotation) {
+	RE::NiMatrix3 rotation_matrix = RE::NiMatrix3();
+	rotation_matrix.entry[0][0] = cos(rotation.z) * cos(rotation.y);
+	rotation_matrix.entry[0][1] = (cos(rotation.z) * sin(rotation.y) * sin(rotation.x)) - (sin(rotation.z) * cos(rotation.x));
+	rotation_matrix.entry[0][2] = (cos(rotation.z) * sin(rotation.y) * cos(rotation.x)) + (sin(rotation.z) * sin(rotation.x));
+	rotation_matrix.entry[1][0] = sin(rotation.z) * cos(rotation.y);
+	rotation_matrix.entry[1][1] = (sin(rotation.z) * sin(rotation.y) * sin(rotation.x)) + (cos(rotation.z) * cos(rotation.x));
+	rotation_matrix.entry[1][2] = (sin(rotation.z) * sin(rotation.y) * cos(rotation.x)) - (cos(rotation.z) * sin(rotation.x));
+	rotation_matrix.entry[2][0] = sin(rotation.y) * -1;
+	rotation_matrix.entry[2][1] = cos(rotation.y) * sin(rotation.x);
+	rotation_matrix.entry[2][2] = cos(rotation.y) * cos(rotation.x);
+	return rotation_matrix;
+}
+
+RE::NiPoint3 rotate_point(RE::NiPoint3 point, RE::NiMatrix3 rotation_matrix) {
+	return RE::NiPoint3(
+		(point.x * rotation_matrix.entry[0][0]) + (point.y * rotation_matrix.entry[1][0]) + (point.z * rotation_matrix.entry[2][0]),
+		(point.x * rotation_matrix.entry[0][1]) + (point.y * rotation_matrix.entry[1][1]) + (point.z * rotation_matrix.entry[2][1]),
+		(point.x * rotation_matrix.entry[0][2]) + (point.y * rotation_matrix.entry[1][2]) + (point.z * rotation_matrix.entry[2][2])
+	);
+}
+
 void LoadMerchTask(
 	FFIResult<RawMerchandiseVec> result,
 	RE::TESObjectREFR* merchant_shelf,
@@ -131,6 +153,10 @@ void LoadMerchTask(
 				return;
 			}
 
+			RE::NiPoint3 shelf_position = merchant_shelf->data.location;
+			RE::NiPoint3 shelf_angle = merchant_shelf->data.angle;
+			RE::NiMatrix3 rotation_matrix = get_rotation_matrix(shelf_angle);
+
 			logger::info(FMT_STRING("LoadMerchandise current shelf page is: {:d}"), merchant_shelf->extraList.GetCount());
 			for (int i = 0; i < vec.len; i++) {
 				RawMerchandise merch = vec.ptr[i];
@@ -191,8 +217,6 @@ void LoadMerchTask(
 					activator_ref->refScale = static_cast<uint16_t>(scale);
 				}
 
-				RE::NiPoint3 shelf_position = merchant_shelf->data.location;
-				RE::NiPoint3 shelf_angle = merchant_shelf->data.angle;
 				RE::NiPoint3 ref_angle = RE::NiPoint3(shelf_angle.x, shelf_angle.y, shelf_angle.z - 3.14);
 				RE::NiPoint3 ref_position;
 				int x_imbalance = (((bound_min.x  * -1) - bound_max.x) * (scale / 100)) / 2;
@@ -204,26 +228,31 @@ void LoadMerchTask(
 				}
 				// TODO: make page size and buy_activator positions configurable per "shelf" type (where is config stored?)
 				if (i % 9 == 0) {
-					ref_position = RE::NiPoint3(shelf_position.x + (-40 * cos(shelf_angle.z)) - (110 * cos(shelf_angle.x) * sin(shelf_angle.z)) + x_imbalance, shelf_position.y + (40 * sin(shelf_angle.z)) - (110 * sin(shelf_angle.x) * cos(shelf_angle.z)) + y_imbalance, shelf_position.z + (110 * cos(shelf_angle.x)) + z_imbalance);
+					ref_position = RE::NiPoint3(-40 + x_imbalance, y_imbalance, 110 + z_imbalance);
 				} else if (i % 9 == 1) {
-					ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 110 + z_imbalance);
+					ref_position = RE::NiPoint3(x_imbalance, y_imbalance, 110 + z_imbalance);
 				} else if (i % 9 == 2) {
-					ref_position = RE::NiPoint3(shelf_position.x + (40 * cos(shelf_angle.z)) + x_imbalance, shelf_position.y + (-40 * sin(shelf_angle.z)) + y_imbalance, shelf_position.z + 110 + z_imbalance);
+					ref_position = RE::NiPoint3(40 + x_imbalance, y_imbalance, 110 + z_imbalance);
 				} else if (i % 9 == 3) {
-					ref_position = RE::NiPoint3(shelf_position.x + (-40 * cos(shelf_angle.z)) + x_imbalance, shelf_position.y + (40 * sin(shelf_angle.z)) + y_imbalance, shelf_position.z + 65 + z_imbalance);
+					ref_position = RE::NiPoint3(-40 + x_imbalance, y_imbalance, 65 + z_imbalance);
 				} else if (i % 9 == 4) {
-					ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 65 + z_imbalance);
+					ref_position = RE::NiPoint3(x_imbalance, y_imbalance, 65 + z_imbalance);
 				} else if (i % 9 == 5) {
-					ref_position = RE::NiPoint3(shelf_position.x + (40 * cos(shelf_angle.z)) + x_imbalance, shelf_position.y + (-40 * sin(shelf_angle.z)) + y_imbalance, shelf_position.z + 65 + z_imbalance);
+					ref_position = RE::NiPoint3(40 + x_imbalance, y_imbalance, 65 + z_imbalance);
 				} else if (i % 9 == 6) {
-					ref_position = RE::NiPoint3(shelf_position.x + (-40 * cos(shelf_angle.z)) + x_imbalance, shelf_position.y + (40 * sin(shelf_angle.z)) + y_imbalance, shelf_position.z + 20 + z_imbalance);
+					ref_position = RE::NiPoint3(-40 + x_imbalance, y_imbalance, 20 + z_imbalance);
 				} else if (i % 9 == 7) {
-					ref_position = RE::NiPoint3(shelf_position.x + x_imbalance, shelf_position.y + y_imbalance, shelf_position.z + 20 + z_imbalance);
+					ref_position = RE::NiPoint3(x_imbalance, y_imbalance, 20 + z_imbalance);
 				} else if (i % 9 == 8) {
-					ref_position = RE::NiPoint3(shelf_position.x + (40 * cos(shelf_angle.z)) + x_imbalance, shelf_position.y + (-40 * sin(shelf_angle.z)) + y_imbalance, shelf_position.z + 20 + z_imbalance);
+					ref_position = RE::NiPoint3(40 + x_imbalance, y_imbalance, 20 + z_imbalance);
 				}
+				logger::info(FMT_STRING("LoadMerchandise relative position x: {:.2f}, y: {:.2f}, z: {:.2f}"), ref_position.x, ref_position.y, ref_position.z);
+				ref_position = rotate_point(ref_position, rotation_matrix);
+				logger::info(FMT_STRING("LoadMerchandise relative rotated position x: {:.2f}, y: {:.2f}, z: {:.2f}"), ref_position.x, ref_position.y, ref_position.z);
+				ref_position = RE::NiPoint3(shelf_position.x + ref_position.x, shelf_position.y + ref_position.y, shelf_position.z + ref_position.z);
+				logger::info(FMT_STRING("LoadMerchandise absolute rotated position x: {:.2f}, y: {:.2f}, z: {:.2f}"), ref_position.x, ref_position.y, ref_position.z);
 				MoveTo_Native(ref, ref->CreateRefHandle(), cell, cell->worldSpace, ref_position - RE::NiPoint3(10000, 10000, 10000), ref_angle);
-				MoveTo_Native(activator_ref, ref->CreateRefHandle(), cell, cell->worldSpace, ref_position, ref_angle);
+				MoveTo_Native(activator_ref, activator_ref->CreateRefHandle(), cell, cell->worldSpace, ref_position, ref_angle);
 				RE::BSFixedString name = RE::BSFixedString::BSFixedString(ref->GetName());
 				activator_ref->SetDisplayName(name, true);
 				activator_ref->extraList.SetOwner(base); // I'm abusing "owner" to link the activator with the Form that should be bought once activated
