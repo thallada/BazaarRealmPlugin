@@ -27,6 +27,9 @@
     <ClCompile Include="src\BRMerchandiseList.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\BRTransaction.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\PCH.h">
@@ -51,6 +54,9 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\NativeFunctions.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\BRTransaction.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

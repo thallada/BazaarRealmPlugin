@@ -223,6 +223,7 @@
     <ClCompile Include="src\BRMerchandiseList.cpp" />
     <ClCompile Include="src\BROwner.cpp" />
     <ClCompile Include="src\BRShop.cpp" />
+    <ClCompile Include="src\BRTransaction.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\PCH.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -241,6 +242,7 @@
     <ClInclude Include="src\BRMerchandiseList.h" />
     <ClInclude Include="src\BROwner.h" />
     <ClInclude Include="src\BRShop.h" />
+    <ClInclude Include="src\BRTransaction.h" />
     <ClInclude Include="src\NativeFunctions.h" />
     <ClInclude Include="src\PCH.h" />
     <ClInclude Include="src\version.h" />

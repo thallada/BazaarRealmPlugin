@@ -6,6 +6,7 @@
 #include "BRShop.h"
 #include "BRInteriorRefList.h"
 #include "BRMerchandiseList.h"
+#include "BRTransaction.h"
 
 bool RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
 {
@@ -25,9 +26,13 @@ bool RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
 	a_vm->RegisterFunction("Toggle", "BRMerchandiseList", ToggleMerchandise);
 	a_vm->RegisterFunction("NextPage", "BRMerchandiseList", LoadNextMerchandise);
 	a_vm->RegisterFunction("PrevPage", "BRMerchandiseList", LoadPrevMerchandise);
-	a_vm->RegisterFunction("Buy", "BRMerchandiseList", BuyMerchandise);
+	a_vm->RegisterFunction("Load", "BRMerchandiseList", LoadMerchandiseByShopId);
+	a_vm->RegisterFunction("Refresh", "BRMerchandiseList", RefreshMerchandise);
 	a_vm->RegisterFunction("Replace3D", "BRMerchandiseList", ReplaceMerch3D);
 	a_vm->RegisterFunction("Create", "BRMerchandiseList", CreateMerchandiseList);
+	a_vm->RegisterFunction("GetQuantity", "BRMerchandiseList", GetMerchandiseQuantity);
+	a_vm->RegisterFunction("GetPrice", "BRMerchandiseList", GetMerchandisePrice);
+	a_vm->RegisterFunction("Create", "BRTransaction", CreateTransaction);
 	return true;
 }
 
