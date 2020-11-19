@@ -39,7 +39,7 @@ bool CreateShop(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedSt
 	return true;
 }
 
-void UpdateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t id, RE::BSFixedString name, RE::BSFixedString description, RE::TESQuest* quest) {
+void UpdateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t id, RE::BSFixedString name, RE::BSFixedString description, RE::TESQuest* quest) {
 	logger::info("Entered UpdateShopImpl");
 	if (!quest) {
 		logger::error("UpdateShopImpl quest is null!");
@@ -66,7 +66,7 @@ void UpdateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32
 	failReg.Unregister(quest);
 }
 
-bool UpdateShop(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t id, RE::BSFixedString name, RE::BSFixedString description, RE::TESQuest* quest) {
+bool UpdateShop(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t id, RE::BSFixedString name, RE::BSFixedString description, RE::TESQuest* quest) {
 	logger::info("Entered UpdateShop");
 	if (!quest) {
 		logger::error("UpdateShop quest is null!");
@@ -78,7 +78,7 @@ bool UpdateShop(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedSt
 	return true;
 }
 
-void GetShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t id, RE::TESQuest* quest) {
+void GetShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t id, RE::TESQuest* quest) {
 	logger::info("Entered GetShopImpl");
 	if (!quest) {
 		logger::error("GetShopImpl quest is null!");
@@ -105,7 +105,7 @@ void GetShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t 
 	failReg.Unregister(quest);
 }
 
-bool GetShop(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t id, RE::TESQuest* quest) {
+bool GetShop(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t id, RE::TESQuest* quest) {
 	logger::info("Entered GetShop");
 	if (!quest) {
 		logger::error("GetShop quest is null!");

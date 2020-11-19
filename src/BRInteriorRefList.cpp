@@ -2,7 +2,7 @@
 
 #include "NativeFunctions.h"
 
-void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESQuest* quest) {	
+void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t shop_id, RE::TESQuest* quest) {	
 	logger::info("Entered CreateInteriorRefListImpl");
 
 	if (!quest) {
@@ -35,7 +35,7 @@ void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 		if (base) {
 			RE::FormID base_form_id = base->GetFormID();
 			const RE::FormType form_type = base->GetFormType();
-			if (base_form_id == 0x7 || form_type == RE::FormType::ActorCharacter) {
+			if (base_form_id == 0x7 || form_type == RE::FormType::NPC || form_type == RE::FormType::LeveledNPC) {
 				// skip saving player ref or other companions
 				continue;
 			}
@@ -107,7 +107,7 @@ void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 	failReg.Unregister(quest);
 }
 
-bool CreateInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESQuest* quest) {
+bool CreateInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t shop_id, RE::TESQuest* quest) {
 	logger::info("Entered CreateInteriorRefList");
 
 	if (!quest) {
@@ -266,13 +266,13 @@ void LoadRefsTask(FFIResult<RawInteriorRefVec> result, RE::TESObjectREFR* target
 	});
 }
 
-void LoadInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t interior_ref_list_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
+void LoadInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t interior_ref_list_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
 	logger::info("Entered LoadInteriorRefListImpl");
 
 	LoadRefsTask(get_interior_ref_list(api_url.c_str(), api_key.c_str(), interior_ref_list_id), target_ref, quest);
 }
 
-bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t interior_ref_list_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
+bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t interior_ref_list_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
 	logger::info("Entered LoadInteriorRefList");
 
 	if (!target_ref) {
@@ -289,13 +289,13 @@ bool LoadInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::
 	return true;
 }
 
-void LoadInteriorRefListByShopIdImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
+void LoadInteriorRefListByShopIdImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t shop_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
 	logger::info("Entered LoadInteriorRefListByShopIdImpl");
 
 	LoadRefsTask(get_interior_ref_list_by_shop_id(api_url.c_str(), api_key.c_str(), shop_id), target_ref, quest);
 }
 
-bool LoadInteriorRefListByShopId(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
+bool LoadInteriorRefListByShopId(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t shop_id, RE::TESObjectREFR* target_ref, RE::TESQuest* quest) {
 	logger::info("Entered LoadInteriorRefListByShopId");
 
 	if (!target_ref) {

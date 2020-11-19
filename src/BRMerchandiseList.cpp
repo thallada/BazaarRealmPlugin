@@ -2,6 +2,45 @@
 
 #include "NativeFunctions.h"
 
+class HaggleVisitor : public RE::PerkEntryVisitor {
+public:
+	HaggleVisitor(RE::Actor *a_actor) {
+		actor = a_actor;
+		result = 1;
+	}
+
+	virtual RE::PerkEntryVisitor::ReturnType Visit(RE::BGSPerkEntry *perkEntry) override {
+		RE::BGSEntryPointPerkEntry *entryPoint = (RE::BGSEntryPointPerkEntry *)perkEntry;
+		RE::BGSPerk *perk = entryPoint->perk;
+		logger::info(FMT_STRING("HaggleVisitor perk: {} ({:x})"), perk->GetFullName(), (uint32_t)perk->GetFormID());
+		RE::BGSPerk *next_perk = perk->nextPerk;
+		if (next_perk) {
+			logger::info(FMT_STRING("HaggleVisitor next_perk: {} ({:x})"), next_perk->GetFullName(), (uint32_t)next_perk->GetFormID());
+			if (actor->HasPerk(next_perk)) {
+				logger::info("HaggleVisitor actor has next_perk, skipping this perk");
+				return RE::PerkEntryVisitor::ReturnType::kContinue;
+			}
+		} else {
+			logger::info("HaggleVisitor next_perk is null");
+		}
+		if (entryPoint->functionData && entryPoint->entryData.function == RE::BGSEntryPointPerkEntry::EntryData::Function::kMultiplyValue) {
+			RE::BGSEntryPointFunctionDataOneValue *oneValue = (RE::BGSEntryPointFunctionDataOneValue*)entryPoint->functionData;
+			logger::info(FMT_STRING("HaggleVisitor setting oneValue data to result: {:.2f}"), oneValue->data);
+			result = oneValue->data;
+		}
+
+		return RE::PerkEntryVisitor::ReturnType::kContinue;
+	}
+
+	float GetResult() const {
+		return result;
+	}
+
+protected:
+	RE::Actor* actor;
+	float result;
+};
+
 bool ClearMerchandiseImpl(RE::TESObjectREFR* merchant_chest, RE::TESObjectREFR* merchant_shelf, RE::TESForm* activator_static, RE::BGSKeyword* shelf_keyword, RE::BGSKeyword* item_keyword, RE::BGSKeyword* activator_keyword)
 {
 	logger::info("Entered ClearMerchandiseImpl");
@@ -92,7 +131,7 @@ void LoadMerchTask(
 	RE::BGSKeyword* next_keyword,
 	RE::BGSKeyword* prev_keyword,
 	int page,
-	bool loadMaxPageIfOver
+	bool load_max_page_if_over
 ) {
 	if (!merchant_shelf) {
 		logger::error("LoadMerchTask merchant_shelf is null!");
@@ -107,7 +146,7 @@ void LoadMerchTask(
 
 	// Placing the refs must be done on the main thread otherwise disabling & deleting refs in ClearMerchandiseImpl causes a crash
 	auto task = SKSE::GetTaskInterface();
-	task->AddTask([result, merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, prev_keyword, next_keyword, page, loadMaxPageIfOver, toggle_ref]() {
+	task->AddTask([result, merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, prev_keyword, next_keyword, page, load_max_page_if_over, toggle_ref]() {
 		RE::TESDataHandler * data_handler = RE::TESDataHandler::GetSingleton();
 		RE::BSScript::Internal::VirtualMachine * a_vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
 		using func_t = decltype(&PlaceAtMe);
@@ -139,8 +178,47 @@ void LoadMerchTask(
 			int max_page = std::ceil((float)(vec.len) / (float)9);
 			int load_page = page;
 
+			// Calculate the actual barter price using the same formula Skyrim uses in the barter menu
+			// Formula from: http://en.uesp.net/wiki/Skyrim:Speech#Prices
+			// Allure perk is not counted because merchandise has no gender and is asexual
+			RE::GameSettingCollection* game_settings = RE::GameSettingCollection::GetSingleton();
+			float f_barter_min = game_settings->GetSetting("fBarterMin")->GetFloat();
+			float f_barter_max = game_settings->GetSetting("fBarterMax")->GetFloat();
+			logger::info(FMT_STRING("LoadMerchandise fBarterMin: {:.2f}, fBarterMax: {:.2f}"), f_barter_min, f_barter_max);
+
+			RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
+			float speech_skill = player->GetActorValue(RE::ActorValue::kSpeech);
+			float speech_skill_advance = player->GetActorValue(RE::ActorValue::kSpeechcraftSkillAdvance);
+			float speech_skill_modifier = player->GetActorValue(RE::ActorValue::kSpeechcraftModifier);
+			float speech_skill_power_modifier = player->GetActorValue(RE::ActorValue::kSpeechcraftPowerModifier);
+			logger::info(FMT_STRING("LoadMerchandise speech_skill: {:.2f}, speech_skill_advance: {:.2f}, speech_skill_modifier: {:.2f}, speech_skill_power_modifier: {:.2f}"), speech_skill, speech_skill_advance, speech_skill_modifier, speech_skill_power_modifier);
+
+			float price_factor = f_barter_max - (f_barter_max - f_barter_min) * std::min(speech_skill, 100.f) / 100.f;
+			logger::info(FMT_STRING("LoadMerchandise price_factor: {:.2f}"), price_factor);
+
+			float buy_haggle = 1;
+			float sell_haggle = 1;
+			if (player->HasPerkEntries(RE::BGSEntryPoint::ENTRY_POINTS::kModBuyPrices)) {
+				HaggleVisitor buy_visitor = HaggleVisitor(reinterpret_cast<RE::Actor*>(player));
+				player->ForEachPerkEntry(RE::BGSEntryPoint::ENTRY_POINTS::kModBuyPrices, buy_visitor);
+				buy_haggle = buy_visitor.GetResult();
+				logger::info(FMT_STRING("LoadMerchandise buy_haggle: {:.2f}"), buy_haggle);
+			}
+			if (player->HasPerkEntries(RE::BGSEntryPoint::ENTRY_POINTS::kModSellPrices)) {
+				HaggleVisitor sell_visitor = HaggleVisitor(reinterpret_cast<RE::Actor*>(player));
+				player->ForEachPerkEntry(RE::BGSEntryPoint::ENTRY_POINTS::kModSellPrices, sell_visitor);
+				sell_haggle = sell_visitor.GetResult();
+				logger::info(FMT_STRING("LoadMerchandise sell_haggle: {:.2f}"), sell_haggle);
+			}
+			logger::info(FMT_STRING("LoadMerchandise 1 - speech_power_mod: {:.2f}"), (1.f - speech_skill_power_modifier / 100.f));
+			logger::info(FMT_STRING("LoadMerchandise 1 - speech_mod: {:.2f}"), (1.f - speech_skill_modifier / 100.f));
+			float buy_price_modifier = buy_haggle * (1.f - speech_skill_power_modifier / 100.f) * (1.f - speech_skill_modifier / 100.f);
+			logger::info(FMT_STRING("LoadMerchandise buy_price_modifier: {:.2f}"), buy_price_modifier);
+			float sell_price_modifier = sell_haggle * (1.f + speech_skill_power_modifier / 100.f) * (1.f + speech_skill_modifier / 100.f);
+			logger::info(FMT_STRING("LoadMerchandise buy_price_modifier: {:.2f}"), sell_price_modifier);
+
 			if (vec.len > 0 && page > max_page) {
-				if (loadMaxPageIfOver) {
+				if (load_max_page_if_over) {
 					load_page = max_page;
 				} else {
 					logger::info(FMT_STRING("LoadMerchandise page {:d} is greater than max_page {:d}, doing nothing"), page, max_page);
@@ -162,6 +240,8 @@ void LoadMerchTask(
 			RE::NiPoint3 shelf_position = merchant_shelf->data.location;
 			RE::NiPoint3 shelf_angle = merchant_shelf->data.angle;
 			RE::NiMatrix3 rotation_matrix = get_rotation_matrix(shelf_angle);
+
+			merchant_chest->ResetInventory(false);
 
 			logger::info(FMT_STRING("LoadMerchandise current shelf page is: {:d}"), merchant_shelf->extraList.GetCount());
 			for (int i = 0; i < vec.len; i++) {
@@ -249,15 +329,17 @@ void LoadMerchTask(
 				}
 				logger::info(FMT_STRING("LoadMerchandise relative position x: {:.2f}, y: {:.2f}, z: {:.2f}"), ref_position.x, ref_position.y, ref_position.z);
 				ref_position = rotate_point(ref_position, rotation_matrix);
+
 				logger::info(FMT_STRING("LoadMerchandise relative rotated position x: {:.2f}, y: {:.2f}, z: {:.2f}"), ref_position.x, ref_position.y, ref_position.z);
 				ref_position = RE::NiPoint3(shelf_position.x + ref_position.x, shelf_position.y + ref_position.y, shelf_position.z + ref_position.z);
 				logger::info(FMT_STRING("LoadMerchandise absolute rotated position x: {:.2f}, y: {:.2f}, z: {:.2f}"), ref_position.x, ref_position.y, ref_position.z);
 				MoveTo_Native(ref, ref->CreateRefHandle(), cell, cell->worldSpace, ref_position - RE::NiPoint3(10000, 10000, 10000), ref_angle);
 				MoveTo_Native(activator_ref, activator_ref->CreateRefHandle(), cell, cell->worldSpace, ref_position, ref_angle);
-				RE::BSFixedString name = RE::BSFixedString::BSFixedString(fmt::format(FMT_STRING("{} for {:d}g ({:d})"), ref->GetName(), merch.price, merch.quantity));
-				activator_ref->SetDisplayName(name, true);
 				activator_extra_linked_ref->linkedRefs.push_back({item_keyword, ref});
 				item_extra_linked_ref->linkedRefs.push_back({activator_keyword, activator_ref});
+
+				int32_t buy_price = std::round(merch.price * buy_price_modifier * price_factor);
+				logger::info(FMT_STRING("LoadMerchandise buy_price: {:d}"), buy_price);
 
 				// I'm abusing the ExtraCount ExtraData type for storing the quantity and price of the merchandise the activator_ref is linked to
 				RE::ExtraCount * extra_quantity_price = activator_ref->extraList.GetByType<RE::ExtraCount>();
@@ -266,7 +348,12 @@ void LoadMerchTask(
 					activator_ref->extraList.Add(extra_quantity_price);
 				}
 				extra_quantity_price->count = merch.quantity;
-				extra_quantity_price->pad14 = merch.price;
+				extra_quantity_price->pad14 = buy_price;
+
+				RE::BSFixedString name = RE::BSFixedString::BSFixedString(fmt::format(FMT_STRING("{} for {:d}g ({:d})"), ref->GetName(), buy_price, merch.quantity));
+				activator_ref->SetDisplayName(name, true);
+				
+				merchant_chest->AddObjectToContainer(base, nullptr, merch.quantity, merchant_chest);
 			}
 
 			// I'm abusing the ExtraCount ExtraData type for storing the current page number state of the shelf
@@ -332,7 +419,7 @@ void LoadMerchTask(
 void LoadMerchandiseImpl(
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
-	uint32_t merchandise_list_id,
+	int32_t merchandise_list_id,
 	RE::TESObjectREFR* merchant_shelf,
 	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
@@ -343,18 +430,18 @@ void LoadMerchandiseImpl(
 	RE::BGSKeyword* next_keyword,
 	RE::BGSKeyword* prev_keyword,
 	int page,
-	bool loadMaxPageIfOver
+	bool load_max_page_if_over
 ) {
 	logger::info("Entered LoadMerchandiseImpl");
 	logger::info(FMT_STRING("LoadMerchandise page: {:d}"), page);
 
-	LoadMerchTask(get_merchandise_list(api_url.c_str(), api_key.c_str(), merchandise_list_id), merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, toggle_keyword, next_keyword, prev_keyword, page, loadMaxPageIfOver);
+	LoadMerchTask(get_merchandise_list(api_url.c_str(), api_key.c_str(), merchandise_list_id), merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, toggle_keyword, next_keyword, prev_keyword, page, load_max_page_if_over);
 }
 
 void LoadMerchandiseByShopIdImpl(
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
-	uint32_t shop_id,
+	int32_t shop_id,
 	RE::TESObjectREFR* merchant_shelf,
 	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
@@ -365,19 +452,19 @@ void LoadMerchandiseByShopIdImpl(
 	RE::BGSKeyword* next_keyword,
 	RE::BGSKeyword* prev_keyword,
 	int page,
-	bool loadMaxPageIfOver
+	bool load_max_page_if_over
 ) {
 	logger::info("Entered LoadMerchandiseByShopIdImpl");
 	logger::info(FMT_STRING("LoadMerchandiseByShopIdImpl page: {:d}"), page);
 
-	LoadMerchTask(get_merchandise_list_by_shop_id(api_url.c_str(), api_key.c_str(), shop_id), merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, toggle_keyword, next_keyword, prev_keyword, page, loadMaxPageIfOver);
+	LoadMerchTask(get_merchandise_list_by_shop_id(api_url.c_str(), api_key.c_str(), shop_id), merchant_shelf, activator_static, shelf_keyword, chest_keyword, item_keyword, activator_keyword, toggle_keyword, next_keyword, prev_keyword, page, load_max_page_if_over);
 }
 
 bool ToggleMerchandise(
 	RE::StaticFunctionTag*,
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
-	uint32_t shop_id,
+	int32_t shop_id,
 	RE::TESObjectREFR* merchant_shelf,
 	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
@@ -439,7 +526,7 @@ bool LoadNextMerchandise(
 	RE::StaticFunctionTag*,
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
-	uint32_t shop_id,
+	int32_t shop_id,
 	RE::TESObjectREFR* merchant_shelf,
 	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
@@ -471,7 +558,7 @@ bool LoadPrevMerchandise(
 	RE::StaticFunctionTag*,
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
-	uint32_t shop_id,
+	int32_t shop_id,
 	RE::TESObjectREFR* merchant_shelf,
 	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
@@ -507,7 +594,7 @@ bool LoadMerchandiseByShopId(
 	RE::StaticFunctionTag*,
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
-	uint32_t shop_id,
+	int32_t shop_id,
 	RE::TESObjectREFR* merchant_shelf,
 	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
@@ -541,7 +628,7 @@ bool RefreshMerchandise(
 	RE::StaticFunctionTag*,
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
-	uint32_t shop_id,
+	int32_t shop_id,
 	RE::TESObjectREFR* merchant_shelf,
 	RE::TESForm* activator_static,
 	RE::BGSKeyword* shelf_keyword,
@@ -552,11 +639,15 @@ bool RefreshMerchandise(
 	RE::BGSKeyword* next_keyword,
 	RE::BGSKeyword* prev_keyword
 ) {
-	logger::info("Entered ClearMerchandise");
+	logger::info("Entered RefreshMerchandise");
 
 	RE::TESObjectREFR * merchant_chest = merchant_shelf->GetLinkedRef(chest_keyword);
 	if (!merchant_chest) {
-		logger::error("ClearMerchandise could not find merchant_chest linked from merchant_shelf!");
+		logger::error("RefreshMerchandise could not find merchant_chest linked from merchant_shelf!");
+		return false;
+	}
+	if (!merchant_shelf) {
+		logger::error("RefreshMerchandise merchant_shelf is null!");
 		return false;
 	}
 	int page = merchant_shelf->extraList.GetCount();
@@ -607,7 +698,7 @@ bool ReplaceMerch3D(RE::StaticFunctionTag*, RE::TESObjectREFR* merchant_shelf, R
 	return true;
 }
 
-void CreateMerchandiseListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* merchant_chest) {	
+void CreateMerchandiseListImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t shop_id, RE::TESObjectREFR* merchant_chest) {	
 	logger::info("Entered CreateMerchandiseListImpl");
 	RE::TESDataHandler * data_handler = RE::TESDataHandler::GetSingleton();
 	std::vector<RawMerchandise> merch_records;
@@ -710,7 +801,7 @@ void CreateMerchandiseListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 	failReg.Unregister(merchant_chest);
 }
 
-bool CreateMerchandiseList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t shop_id, RE::TESObjectREFR* merchant_chest) {
+bool CreateMerchandiseList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t shop_id, RE::TESObjectREFR* merchant_chest) {
 	logger::info("Entered CreateMerchandiseList");
 
 	if (!merchant_chest) {

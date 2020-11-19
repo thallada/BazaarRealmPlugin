@@ -1,6 +1,6 @@
 #include "bindings.h"
 
-void CreateOwnerImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BSFixedString name, uint32_t mod_version, RE::TESQuest* quest) {
+void CreateOwnerImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BSFixedString name, int32_t mod_version, RE::TESQuest* quest) {
 	logger::info("Entered CreateOwnerImpl");
 	if (!quest) {
 		logger::error("CreateOwnerImpl quest is null!");
@@ -27,7 +27,7 @@ void CreateOwnerImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::B
 	failReg.Unregister(quest);
 }
 
-bool CreateOwner(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BSFixedString name, uint32_t mod_version, RE::TESQuest* quest) {
+bool CreateOwner(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BSFixedString name, int32_t mod_version, RE::TESQuest* quest) {
 	logger::info("Entered CreateOwner");
 	if (!quest) {
 		logger::error("CreateOwner quest is null!");
@@ -39,7 +39,7 @@ bool CreateOwner(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedS
 	return true;
 }
 
-void UpdateOwnerImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t id,  RE::BSFixedString name, uint32_t mod_version, RE::TESQuest* quest) {
+void UpdateOwnerImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t id,  RE::BSFixedString name, int32_t mod_version, RE::TESQuest* quest) {
 	logger::info("Entered UpdateOwnerImpl");
 	if (!quest) {
 		logger::error("UpdateOwnerImpl quest is null!");
@@ -66,7 +66,7 @@ void UpdateOwnerImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, uint3
 	failReg.Unregister(quest);
 }
 
-bool UpdateOwner(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, uint32_t id, RE::BSFixedString name, uint32_t mod_version, RE::TESQuest* quest) {
+bool UpdateOwner(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t id, RE::BSFixedString name, int32_t mod_version, RE::TESQuest* quest) {
 	logger::info("Entered UpdateOwner");
 	if (!quest) {
 		logger::error("UpdateOwner quest is null!");
