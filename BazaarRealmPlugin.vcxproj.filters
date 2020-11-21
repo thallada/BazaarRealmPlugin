@@ -30,6 +30,9 @@
     <ClCompile Include="src\BRTransaction.cpp">
       <Filter>src</Filter>
     </ClCompile>
+    <ClCompile Include="src\utils.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\PCH.h">
@@ -57,6 +60,12 @@
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\BRTransaction.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utils.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\FormIds.h">
       <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>

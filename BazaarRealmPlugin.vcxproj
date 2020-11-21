@@ -235,6 +235,7 @@
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</MultiProcessorCompilation>
       <MultiProcessorCompilation Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</MultiProcessorCompilation>
     </ClCompile>
+    <ClCompile Include="src\utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\BRClient.h" />
@@ -243,8 +244,10 @@
     <ClInclude Include="src\BROwner.h" />
     <ClInclude Include="src\BRShop.h" />
     <ClInclude Include="src\BRTransaction.h" />
+    <ClInclude Include="src\FormIds.h" />
     <ClInclude Include="src\NativeFunctions.h" />
     <ClInclude Include="src\PCH.h" />
+    <ClInclude Include="src\utils.h" />
     <ClInclude Include="src\version.h" />
   </ItemGroup>
   <ItemGroup>
