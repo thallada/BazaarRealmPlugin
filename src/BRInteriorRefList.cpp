@@ -76,6 +76,7 @@ void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
 	failReg.Register(quest, RE::BSFixedString("OnCreateInteriorRefListFail"));
 
+	// TODO: may need to dynamically pass shop cell into this function
 	RE::TESObjectCELL * cell = RE::TESObjectCELL::LookupByEditorID<RE::TESObjectCELL>("BREmpty");
 	logger::info(FMT_STRING("CreateInteriorRefListImpl lookup cell override name: {} id: {:x}"), cell->GetName(), (uint32_t)cell->GetFormID());
 	if (!cell) {
@@ -92,8 +93,13 @@ void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 	for (auto entry = cell->references.begin(); entry != cell->references.end(); ++entry) {
 		RE::TESObjectREFR * ref = (*entry).get();
 		const char * name = ref->GetName();
-		logger::info(FMT_STRING("CreateInteriorRefList ref: {}"), name);
-		const RE::TESBoundObject * base = ref->GetBaseObject();
+		RE::FormID ref_form_id = ref->GetFormID();
+		logger::info(FMT_STRING("CreateInteriorRefList ref: {}, form_id: {:x}"), name, (uint32_t)ref_form_id);
+		if (ref->IsDisabled()) {
+			logger::info("CreateInteriorRefList skipping ref since it is disabled");
+			continue;
+		}
+		RE::TESBoundObject * base = ref->GetBaseObject();
 		if (base) {
 			RE::FormID base_form_id = base->GetFormID();
 			const RE::FormType form_type = base->GetFormType();
@@ -113,11 +119,9 @@ void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 			logger::info(FMT_STRING("CreateInteriorRefList position: {:.2f}, {:.2f}, {:.2f} angle: {:.2f}, {:.2f}, {:.2f}  scale: {:d}"), position_x, position_y, position_z, angle_x, angle_y, angle_z, scale);
 			logger::info(FMT_STRING("CreateInteriorRefList deleted: {:d}, wants delete: {:d}"), ref->IsMarkedForDeletion(), ref->inGameFormFlags.all(RE::TESObjectREFR::InGameFormFlag::kWantsDelete));
 			
-			RE::TESFile * base_file = base->GetFile(0);
-			char * base_file_name = base_file->fileName;
-			bool is_light = base_file->recordFlags.all(RE::TESFile::RecordFlag::kSmallFile);
-			uint32_t base_local_form_id = is_light ? base_form_id & 0xfff : base_form_id & 0xFFFFFF;
-			RE::FormID ref_form_id = ref->GetFormID();
+			std::pair<uint32_t, const char*> id_parts = get_local_form_id_and_mod_name(base);
+			uint32_t base_local_form_id = id_parts.first;
+			const char * base_file_name = id_parts.second;
 			uint16_t ref_mod_index = ref_form_id >> 24;
 			char * ref_file_name = nullptr;
 			uint32_t ref_local_form_id = ref_form_id & 0xFFFFFF;
@@ -133,7 +137,7 @@ void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 				}
 			}
 			logger::info(FMT_STRING("CreateInteriorRefList ref_file_name: {}, base_file_name: {}"), ref_file_name, base_file_name);
-			if (strcmp("Bazaar Realm.esp", base_file_name) == 0) {
+			if (strcmp(base_file_name, MOD_NAME) == 0) {
 				logger::info(FMT_STRING("CreateInteriorRefList ref base is in Bazaar Ream.esp: {:x}"), base_local_form_id);
 				if (ignored_shelf_related_form_ids.find(base_local_form_id) != ignored_shelf_related_form_ids.end()) {
 					logger::info("CreateInteriorRefList ref is an ignored shelf related form");
@@ -218,8 +222,8 @@ bool CreateInteriorRefList(RE::StaticFunctionTag*, RE::BSFixedString api_url, RE
 bool ClearCell(RE::StaticFunctionTag*) {
 	logger::info("Entered ClearCell");
 
-	RE::TESDataHandler * data_handler = RE::TESDataHandler::GetSingleton();
 	using func_t = bool(RE::TESObjectREFR* a_thisObj, void* a_param1, void* a_param2, double& a_result);
+	// TODO: the cell will need to be dynamically passed in
 	RE::TESObjectCELL * cell = RE::TESObjectCELL::LookupByEditorID<RE::TESObjectCELL>("BREmpty");
 	logger::info(FMT_STRING("ClearCell lookup cell override name: {} id: {:x}"), cell->GetName(), (uint32_t)cell->GetFormID());
 	if (!cell) {
@@ -235,18 +239,7 @@ bool ClearCell(RE::StaticFunctionTag*) {
 
 		int mod_index = form_id >> 24;
 		if (mod_index != 255) {
-			RE::TESFile * file = ref->GetDescriptionOwnerFile();
-			if (file) {
-				bool is_light = file->recordFlags.all(RE::TESFile::RecordFlag::kSmallFile);
-				uint32_t local_form_id = is_light ? ref->GetFormID() & 0xfff : form_id & 0xFFFFFF;
-				if (!data_handler->LookupForm<RE::TESObjectREFR>(local_form_id, file->fileName)) {
-					logger::info(FMT_STRING("ClearCell ref was not in mod file! {:x} {}"), local_form_id, ref->GetName());
-				} else {
-					logger::info(FMT_STRING("ClearCell ref in mod file {:x} {}"), local_form_id, ref->GetName());
-				}
-			} else {
-				logger::info(FMT_STRING("ClearCell ref not in ANY file! {:x} {}"), (uint32_t)form_id, ref->GetName());
-			}
+			// TODO: recognize somehow that this ref was a pre-placed initially disabled furnature upgrade piece and disable it now if so
 			++entry;
 		} else {
 			logger::info(FMT_STRING("ClearCell ref is a temp ref, deleting {:x} {}"), (uint32_t)form_id, ref->GetName());
@@ -267,6 +260,14 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 		return;
 	}
 
+	// Testing to see what ExtraLinkedRefChildren stores
+	RE::ExtraLinkedRefChildren* linkedChildren = (RE::ExtraLinkedRefChildren*)public_chest->extraList.GetByType(RE::ExtraDataType::kLinkedRefChildren);
+	if (linkedChildren) {
+		logger::info(FMT_STRING("CreateMerchandiseList public_chest has linkedChildren: size: {}"), linkedChildren->linkedChildren.size());
+	} else {
+		logger::info("CreateMerchandiseList public_chest has no linkedChildren");
+	}
+
 	// Placing the refs must be done on the main thread otherwise calling MoveTo causes a crash
 	auto task = SKSE::GetTaskInterface();
 	task->AddTask([result, target_ref, private_chest, public_chest, quest]() {
@@ -277,6 +278,7 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 		using func_t2 = decltype(&MoveTo);
 		REL::Relocation<func_t2> MoveTo_Native(RE::Offset::TESObjectREFR::MoveTo);
 		REL::ID extra_linked_ref_vtbl(static_cast<std::uint64_t>(229564));
+		std::vector<RE::TESObjectREFR*> shelves;
 
 		RE::BGSKeyword* shelf_keyword = data_handler->LookupForm<RE::BGSKeyword>(KEYWORD_SHELF, MOD_NAME);
 		RE::BGSKeyword* chest_keyword = data_handler->LookupForm<RE::BGSKeyword>(KEYWORD_CHEST, MOD_NAME);
@@ -285,7 +287,7 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 		RE::BGSKeyword* next_keyword = data_handler->LookupForm<RE::BGSKeyword>(KEYWORD_NEXT, MOD_NAME);
 		RE::BGSKeyword* prev_keyword = data_handler->LookupForm<RE::BGSKeyword>(KEYWORD_PREV, MOD_NAME);
 		
-		SKSE::RegistrationMap<bool> successReg = SKSE::RegistrationMap<bool>();
+		SKSE::RegistrationMap<bool, std::vector<RE::TESObjectREFR*>> successReg = SKSE::RegistrationMap<bool, std::vector<RE::TESObjectREFR*>>();
 		successReg.Register(quest, RE::BSFixedString("OnLoadInteriorRefListSuccess"));
 		SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
 		failReg.Register(quest, RE::BSFixedString("OnLoadInteriorRefListFail"));
@@ -344,6 +346,10 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 					game_ref = data_handler->LookupForm<RE::TESObjectREFR>(ref.ref_local_form_id, ref.ref_mod_name);
 					if (game_ref) {
 						logger::info(FMT_STRING("LoadInteriorRefList lookup ref name: {}, form_id: {:x}"), game_ref->GetName(), (uint32_t)game_ref->GetFormID());
+						if (game_ref->IsDisabled()) {
+							logger::info("LoadInteriorRefList lookup ref is disabled, enabling");
+							game_ref->formFlags &= ~RE::TESObjectREFR::RecordFlags::kInitiallyDisabled;
+						}
 					} else {
 						logger::info(FMT_STRING("LoadInteriorRefList lookup ref not found, ref_mod_name: {}, ref_local_form_id: {:x}"), ref.ref_mod_name, ref.ref_local_form_id);
 					}
@@ -392,7 +398,8 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 					RE::TESObjectREFR* shelf_ref = PlaceAtMe_Native(a_vm, 0, target_ref, form, 1, false, false);
 					MoveTo_Native(shelf_ref, shelf_ref->CreateRefHandle(), cell, cell->worldSpace, position, angle);
 					shelf_ref->data.angle = angle; // set angle directly to fix bug with MoveTo in an unloaded target cell
-					RE::ExtraLinkedRef* shelf_extra_linked_ref = (RE::ExtraLinkedRef*)RE::BSExtraData::Create(sizeof(RE::ExtraLinkedRef), extra_linked_ref_vtbl.address());
+					shelves.push_back(shelf_ref);
+					RE::ExtraLinkedRef* shelf_extra_linked_ref = RE::BSExtraData::Create<RE::ExtraLinkedRef>(extra_linked_ref_vtbl.address());
 					shelf_extra_linked_ref->linkedRefs.push_back({public_chest_keyword, public_chest});
 					shelf_extra_linked_ref->linkedRefs.push_back({chest_keyword, private_chest});
 					shelf_ref->extraList.Add(shelf_extra_linked_ref);
@@ -429,7 +436,7 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 							button_ref->data.angle = button_angle; // set angle directly to fix bug with MoveTo in an unloaded target cell
 							button_ref->refScale = button.position.scale;
 
-							RE::ExtraLinkedRef* button_extra_linked_ref = (RE::ExtraLinkedRef*)RE::BSExtraData::Create(sizeof(RE::ExtraLinkedRef), extra_linked_ref_vtbl.address());
+							RE::ExtraLinkedRef* button_extra_linked_ref = RE::BSExtraData::Create<RE::ExtraLinkedRef>(extra_linked_ref_vtbl.address());
 							button_extra_linked_ref->linkedRefs.push_back({shelf_keyword, shelf_ref});
 							button_ref->extraList.Add(button_extra_linked_ref);
 
@@ -459,7 +466,7 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 			return;
 		}
 
-		successReg.SendEvent(true);
+		successReg.SendEvent(true, shelves);
 		successReg.Unregister(quest);
 		failReg.Unregister(quest);
 	});

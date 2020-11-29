@@ -19,3 +19,11 @@ RE::NiPoint3 rotate_point(RE::NiPoint3 point, RE::NiMatrix3 rotation_matrix) {
 		(point.x * rotation_matrix.entry[0][2]) + (point.y * rotation_matrix.entry[1][2]) + (point.z * rotation_matrix.entry[2][2])
 	);
 }
+
+std::pair<uint32_t, const char*> get_local_form_id_and_mod_name(RE::TESForm* form) {
+	RE::FormID form_id = form->GetFormID();
+	RE::TESFile* file = form->GetFile(0);
+	const char* mod_name = file->fileName;
+	bool is_light = file->recordFlags.all(RE::TESFile::RecordFlag::kSmallFile);
+	return std::pair(is_light ? form_id & 0xfff : form_id & 0xFFFFFF, mod_name);
+}

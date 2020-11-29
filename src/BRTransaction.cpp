@@ -1,4 +1,5 @@
 #include "bindings.h"
+#include "utils.h"
 
 void CreateTransactionImpl(
 	RE::BSFixedString api_url,
@@ -33,10 +34,9 @@ void CreateTransactionImpl(
 	RE::FormID form_id = merch_base->GetFormID();
 	logger::info(FMT_STRING("CreateTransactionImpl merch_base form_id: {:x}, name: {}, type: {:x}"), (uint32_t)form_id, name, (uint32_t)form_type);
 
-	RE::TESFile * file = merch_base->GetFile(0);
-	const char * mod_name = file->fileName;
-	bool is_light = file->recordFlags.all(RE::TESFile::RecordFlag::kSmallFile);
-	uint32_t local_form_id = is_light ? form_id & 0xfff : form_id & 0xFFFFFF;
+	std::pair<uint32_t, const char*> id_parts = get_local_form_id_and_mod_name(merch_base);
+	uint32_t local_form_id = id_parts.first;
+	const char* mod_name = id_parts.second;
 	logger::info(FMT_STRING("CreateTransactionImpl merch_base form file_name: {}, local_form_id: {:x}"), mod_name, local_form_id);
 
 	// TODO: implement is_food
