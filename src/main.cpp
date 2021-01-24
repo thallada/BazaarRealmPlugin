@@ -24,8 +24,8 @@ bool RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
 	a_vm->RegisterFunction("Load", "BRInteriorRefList", LoadInteriorRefList);
 	a_vm->RegisterFunction("LoadByShopId", "BRInteriorRefList", LoadInteriorRefListByShopId);
 	//a_vm->RegisterFunction("Toggle", "BRMerchandiseList", ToggleMerchandise);
-	//a_vm->RegisterFunction("NextPage", "BRMerchandiseList", LoadNextMerchandise);
-	//a_vm->RegisterFunction("PrevPage", "BRMerchandiseList", LoadPrevMerchandise);
+	a_vm->RegisterFunction("NextPage", "BRMerchandiseList", LoadNextMerchandise);
+	a_vm->RegisterFunction("PrevPage", "BRMerchandiseList", LoadPrevMerchandise);
 	a_vm->RegisterFunction("Load", "BRMerchandiseList", LoadMerchandiseByShopId);
 	//a_vm->RegisterFunction("Refresh", "BRMerchandiseList", RefreshMerchandise);
 	a_vm->RegisterFunction("Replace3D", "BRMerchandiseList", ReplaceMerch3D);
