@@ -33,6 +33,7 @@ bool RegisterFuncs(RE::BSScript::IVirtualMachine* a_vm)
 	a_vm->RegisterFunction("Create", "BRMerchandiseList", CreateMerchandiseList);
 	a_vm->RegisterFunction("GetQuantity", "BRMerchandiseList", GetMerchandiseQuantity);
 	a_vm->RegisterFunction("GetPrice", "BRMerchandiseList", GetMerchandisePrice);
+	a_vm->RegisterFunction("GetSellPrice", "BRMerchandiseList", GetMerchandiseSellPrice);
 	a_vm->RegisterFunction("Create", "BRTransaction", CreateTransaction);
 	a_vm->RegisterFunction("CreateFromVendorSale", "BRTransaction", CreateTransactionFromVendorSale);
 	return true;

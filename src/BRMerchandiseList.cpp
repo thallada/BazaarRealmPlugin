@@ -108,6 +108,73 @@ bool ClearMerchandise(RE::TESObjectREFR* merchant_shelf) {
 	return true;
 }
 
+std::tuple<float, float, float> CalculatePriceModifiers() {
+	// Calculate the actual barter price using the same formula Skyrim uses in the barter menu
+	// Formula from: http://en.uesp.net/wiki/Skyrim:Speech#Prices
+	// Allure perk is not counted because merchandise has no gender and is asexual
+	RE::GameSettingCollection* game_settings = RE::GameSettingCollection::GetSingleton();
+	float f_barter_min = game_settings->GetSetting("fBarterMin")->GetFloat();
+	float f_barter_max = game_settings->GetSetting("fBarterMax")->GetFloat();
+	logger::info(FMT_STRING("CalculatePriceModifiers fBarterMin: {:.2f}, fBarterMax: {:.2f}"), f_barter_min, f_barter_max);
+
+	RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
+	float speech_skill = player->GetActorValue(RE::ActorValue::kSpeech);
+	float speech_skill_advance = player->GetActorValue(RE::ActorValue::kSpeechcraftSkillAdvance);
+	float speech_skill_modifier = player->GetActorValue(RE::ActorValue::kSpeechcraftModifier);
+	float speech_skill_power_modifier = player->GetActorValue(RE::ActorValue::kSpeechcraftPowerModifier);
+	logger::info(FMT_STRING("CalculatePriceModifiers speech_skill: {:.2f}, speech_skill_advance: {:.2f}, speech_skill_modifier: {:.2f}, speech_skill_power_modifier: {:.2f}"), speech_skill, speech_skill_advance, speech_skill_modifier, speech_skill_power_modifier);
+
+	float price_factor = f_barter_max - (f_barter_max - f_barter_min) * std::min(speech_skill, 100.f) / 100.f;
+	logger::info(FMT_STRING("CalculatePriceModifiers price_factor: {:.2f}"), price_factor);
+
+	float buy_haggle = 1;
+	float sell_haggle = 1;
+	if (player->HasPerkEntries(RE::BGSEntryPoint::ENTRY_POINTS::kModBuyPrices)) {
+		HaggleVisitor buy_visitor = HaggleVisitor(reinterpret_cast<RE::Actor*>(player));
+		player->ForEachPerkEntry(RE::BGSEntryPoint::ENTRY_POINTS::kModBuyPrices, buy_visitor);
+		buy_haggle = buy_visitor.GetResult();
+		logger::info(FMT_STRING("CalculatePriceModifiers buy_haggle: {:.2f}"), buy_haggle);
+	}
+	if (player->HasPerkEntries(RE::BGSEntryPoint::ENTRY_POINTS::kModSellPrices)) {
+		HaggleVisitor sell_visitor = HaggleVisitor(reinterpret_cast<RE::Actor*>(player));
+		player->ForEachPerkEntry(RE::BGSEntryPoint::ENTRY_POINTS::kModSellPrices, sell_visitor);
+		sell_haggle = sell_visitor.GetResult();
+		logger::info(FMT_STRING("CalculatePriceModifiers sell_haggle: {:.2f}"), sell_haggle);
+	}
+	logger::info(FMT_STRING("CalculatePriceModifiers 1 - speech_power_mod: {:.2f}"), (1.f - speech_skill_power_modifier / 100.f));
+	logger::info(FMT_STRING("CalculatePriceModifiers 1 - speech_mod: {:.2f}"), (1.f - speech_skill_modifier / 100.f));
+	float buy_price_modifier = buy_haggle * (1.f - speech_skill_power_modifier / 100.f) * (1.f - speech_skill_modifier / 100.f);
+	logger::info(FMT_STRING("CalculatePriceModifiers buy_price_modifier: {:.2f}"), buy_price_modifier);
+	float sell_price_modifier = sell_haggle * (1.f + speech_skill_power_modifier / 100.f) * (1.f + speech_skill_modifier / 100.f);
+	logger::info(FMT_STRING("CalculatePriceModifiers buy_price_modifier: {:.2f}"), sell_price_modifier);
+
+	std::tuple modifiers (price_factor, buy_price_modifier, sell_price_modifier);
+	return modifiers;
+}
+
+int CalculateBuyPrice(RE::TESForm* form, float price_factor, float buy_price_modifier) {
+	int32_t buy_price = std::round(form->GetGoldValue() * buy_price_modifier * price_factor);
+	logger::info(FMT_STRING("CalculateBuyPrice buy_price: {:d}"), buy_price);
+	return buy_price;
+}
+
+int CalculateSellPrice(RE::TESForm* form, float price_factor, float sell_price_modifier) {
+	int32_t sell_price = std::round(form->GetGoldValue() * sell_price_modifier / price_factor);
+	logger::info(FMT_STRING("CalculateSellPrice sell_price: {:d}"), sell_price);
+	return sell_price;
+}
+
+int GetMerchandiseSellPrice(RE::StaticFunctionTag*, RE::TESForm* form) {
+	if (!form) {
+		logger::error("GetMerchandiseSellPrice form is null!");
+		return false;
+	}
+	std::tuple modifiers = CalculatePriceModifiers();
+	float price_factor = std::get<0>(modifiers);
+	float sell_price_modifier = std::get<2>(modifiers);
+	CalculateSellPrice(form, price_factor, sell_price_modifier);
+}
+
 bool ClearAllMerchandise(RE::TESObjectCELL* cell) {
 	logger::info("Entered ClearAllMerchandise");
 	RE::TESDataHandler* data_handler = RE::TESDataHandler::GetSingleton();
@@ -237,44 +304,10 @@ void FillShelf(
 	extra_page_num->count = load_page;
 	logger::info(FMT_STRING("FillShelf set shelf page to: {:d}"), merchant_shelf->extraList.GetCount());
 
-	// Calculate the actual barter price using the same formula Skyrim uses in the barter menu
-	// Formula from: http://en.uesp.net/wiki/Skyrim:Speech#Prices
-	// Allure perk is not counted because merchandise has no gender and is asexual
-	RE::GameSettingCollection* game_settings = RE::GameSettingCollection::GetSingleton();
-	float f_barter_min = game_settings->GetSetting("fBarterMin")->GetFloat();
-	float f_barter_max = game_settings->GetSetting("fBarterMax")->GetFloat();
-	logger::info(FMT_STRING("FillShelf fBarterMin: {:.2f}, fBarterMax: {:.2f}"), f_barter_min, f_barter_max);
-
-	RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
-	float speech_skill = player->GetActorValue(RE::ActorValue::kSpeech);
-	float speech_skill_advance = player->GetActorValue(RE::ActorValue::kSpeechcraftSkillAdvance);
-	float speech_skill_modifier = player->GetActorValue(RE::ActorValue::kSpeechcraftModifier);
-	float speech_skill_power_modifier = player->GetActorValue(RE::ActorValue::kSpeechcraftPowerModifier);
-	logger::info(FMT_STRING("FillShelf speech_skill: {:.2f}, speech_skill_advance: {:.2f}, speech_skill_modifier: {:.2f}, speech_skill_power_modifier: {:.2f}"), speech_skill, speech_skill_advance, speech_skill_modifier, speech_skill_power_modifier);
-
-	float price_factor = f_barter_max - (f_barter_max - f_barter_min) * std::min(speech_skill, 100.f) / 100.f;
-	logger::info(FMT_STRING("FillShelf price_factor: {:.2f}"), price_factor);
-
-	float buy_haggle = 1;
-	float sell_haggle = 1;
-	if (player->HasPerkEntries(RE::BGSEntryPoint::ENTRY_POINTS::kModBuyPrices)) {
-		HaggleVisitor buy_visitor = HaggleVisitor(reinterpret_cast<RE::Actor*>(player));
-		player->ForEachPerkEntry(RE::BGSEntryPoint::ENTRY_POINTS::kModBuyPrices, buy_visitor);
-		buy_haggle = buy_visitor.GetResult();
-		logger::info(FMT_STRING("FillShelf buy_haggle: {:.2f}"), buy_haggle);
-	}
-	if (player->HasPerkEntries(RE::BGSEntryPoint::ENTRY_POINTS::kModSellPrices)) {
-		HaggleVisitor sell_visitor = HaggleVisitor(reinterpret_cast<RE::Actor*>(player));
-		player->ForEachPerkEntry(RE::BGSEntryPoint::ENTRY_POINTS::kModSellPrices, sell_visitor);
-		sell_haggle = sell_visitor.GetResult();
-		logger::info(FMT_STRING("FillShelf sell_haggle: {:.2f}"), sell_haggle);
-	}
-	logger::info(FMT_STRING("FillShelf 1 - speech_power_mod: {:.2f}"), (1.f - speech_skill_power_modifier / 100.f));
-	logger::info(FMT_STRING("FillShelf 1 - speech_mod: {:.2f}"), (1.f - speech_skill_modifier / 100.f));
-	float buy_price_modifier = buy_haggle * (1.f - speech_skill_power_modifier / 100.f) * (1.f - speech_skill_modifier / 100.f);
-	logger::info(FMT_STRING("FillShelf buy_price_modifier: {:.2f}"), buy_price_modifier);
-	float sell_price_modifier = sell_haggle * (1.f + speech_skill_power_modifier / 100.f) * (1.f + speech_skill_modifier / 100.f);
-	logger::info(FMT_STRING("FillShelf buy_price_modifier: {:.2f}"), sell_price_modifier);
+	std::tuple modifiers = CalculatePriceModifiers();
+	float price_factor = std::get<0>(modifiers);
+	float buy_price_modifier = std::get<1>(modifiers);
+	float sell_price_modifier = std::get<2>(modifiers);
 
 	RE::NiPoint3 shelf_position = merchant_shelf->data.location;
 	RE::NiPoint3 shelf_angle = merchant_shelf->data.angle;
@@ -370,7 +403,7 @@ void FillShelf(
 			activator_extra_linked_ref->linkedRefs.push_back({item_keyword, ref});
 			ref->extraList.Add(item_extra_linked_ref);
 
-			int32_t buy_price = std::round(ref->GetGoldValue() * buy_price_modifier * price_factor);
+			int32_t buy_price = CalculateBuyPrice(base, price_factor, buy_price_modifier);
 			logger::info(FMT_STRING("FillShelf buy_price: {:d}"), buy_price);
 
 			// I'm abusing the ExtraCount ExtraData type for storing the quantity and price of the merchandise the activator_ref is linked to
@@ -965,3 +998,4 @@ int GetMerchandisePrice(RE::StaticFunctionTag*, RE::TESObjectREFR* activator) {
 	}
 	return price;
 }
+

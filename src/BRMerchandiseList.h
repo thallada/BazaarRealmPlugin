@@ -44,3 +44,4 @@ bool CreateMerchandiseList(
 );
 int GetMerchandiseQuantity(RE::StaticFunctionTag*, RE::TESObjectREFR* activator);
 int GetMerchandisePrice(RE::StaticFunctionTag*, RE::TESObjectREFR* activator);
+int GetMerchandiseSellPrice(RE::StaticFunctionTag*, RE::TESForm* form);
