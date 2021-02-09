@@ -5,8 +5,8 @@
 #include "FormIds.h"
 
 const float PI = 3.14159265358979f;
-const std::map<uint32_t, uint32_t> shelf_types { {0x00603f, 1} };
-const std::map<uint32_t, uint32_t> shelf_form_ids { {1, 0x00603f} };
+const std::unordered_map<uint32_t, uint32_t> shelf_types { {0x00603f, 1} };
+const std::unordered_map<uint32_t, uint32_t> shelf_form_ids { {1, 0x00603f} };
 struct Position {
 	float position_x;
 	float position_y;
@@ -21,7 +21,7 @@ struct Button {
 	Position position;
 };
 enum ButtonType { Toggle, Next, Previous };
-const std::map<uint32_t, std::map<ButtonType, Button>> shelf_buttons {
+const std::unordered_map<uint32_t, std::unordered_map<ButtonType, Button>> shelf_buttons {
 	{ 1, {
 		{ ButtonType::Next, Button {
 			0x002fab,
@@ -412,7 +412,7 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 
 					auto maybe_buttons = shelf_buttons.find(shelf.shelf_type);
 					if (maybe_buttons != shelf_buttons.end()) {
-						std::map<ButtonType, Button> buttons = (*maybe_buttons).second;
+						std::unordered_map<ButtonType, Button> buttons = (*maybe_buttons).second;
 						for (auto entry = buttons.begin(); entry != buttons.end(); ++entry) {
 							ButtonType button_type = (*entry).first;
 							Button button = (*entry).second;

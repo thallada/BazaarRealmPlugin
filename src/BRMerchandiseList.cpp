@@ -855,6 +855,122 @@ bool ReplaceAllMerch3D(RE::StaticFunctionTag*, RE::TESObjectCELL* cell) {
 	return true;
 }
 
+RE::BGSKeywordForm* LookupKeywordForm(RE::FormID form_id, RE::FormType form_type) {
+	// Casting directly from container entry TESBoundObject to BGSKeywordForm is not working.
+	// Instead, lookup form class instance that implements BGSKeywordForm by form id and form type and upcast to BGSKeywordForm
+	switch (form_type) {
+		case RE::FormType::AlchemyItem: {
+			RE::AlchemyItem* item = RE::TESForm::LookupByID<RE::AlchemyItem>(form_id);
+			if (item) {
+				return dynamic_cast<RE::BGSKeywordForm*>(item);
+			} else {
+				logger::warn(FMT_STRING("LookupKeywordForm couldn't lookup AlchemyItem with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			}
+			break;
+		} case RE::FormType::Ammo: {
+			RE::TESAmmo* item = RE::TESForm::LookupByID<RE::TESAmmo>(form_id);
+			if (item) {
+				return dynamic_cast<RE::BGSKeywordForm*>(item);
+			} else {
+				logger::warn(FMT_STRING("LookupKeywordForm couldn't lookup TESAmmo with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			}
+			break;
+		} case RE::FormType::Armor: {
+			RE::TESObjectARMO* item = RE::TESForm::LookupByID<RE::TESObjectARMO>(form_id);
+			if (item) {
+				return dynamic_cast<RE::BGSKeywordForm*>(item);
+			} else {
+				logger::warn(FMT_STRING("LookupKeywordForm couldn't lookup TESObjectARMO with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			}
+			break;
+		} case RE::FormType::Book: {
+			RE::TESObjectBOOK* item = RE::TESForm::LookupByID<RE::TESObjectBOOK>(form_id);
+			if (item) {
+				return dynamic_cast<RE::BGSKeywordForm*>(item);
+			} else {
+				logger::warn(FMT_STRING("LookupKeywordForm couldn't lookup TESObjectBOOK with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			}
+			break;
+		} case RE::FormType::Ingredient: {
+			RE::IngredientItem* item = RE::TESForm::LookupByID<RE::IngredientItem>(form_id);
+			if (item) {
+				return dynamic_cast<RE::BGSKeywordForm*>(item);
+			} else {
+				logger::warn(FMT_STRING("LookupKeywordForm couldn't lookup IngredientItem with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			}
+			break;
+		} case RE::FormType::KeyMaster: {
+			RE::TESKey* item = RE::TESForm::LookupByID<RE::TESKey>(form_id);
+			if (item) {
+				return dynamic_cast<RE::BGSKeywordForm*>(item);
+			} else {
+				logger::warn(FMT_STRING("LookupKeywordForm couldn't lookup TESKey with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			}
+			break;
+		} case RE::FormType::Misc: {
+			RE::TESObjectMISC* item = RE::TESForm::LookupByID<RE::TESObjectMISC>(form_id);
+			if (item) {
+				return dynamic_cast<RE::BGSKeywordForm*>(item);
+			} else {
+				logger::warn(FMT_STRING("LookupKeywordForm couldn't lookup TESObjectMISC with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			}
+			break;
+		} case RE::FormType::Scroll: {
+			RE::ScrollItem* item = RE::TESForm::LookupByID<RE::ScrollItem>(form_id);
+			if (item) {
+				return dynamic_cast<RE::BGSKeywordForm*>(item);
+			} else {
+				logger::warn(FMT_STRING("LookupKeywordForm couldn't lookup ScrollItem with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			}
+			break;
+		} case RE::FormType::SoulGem: {
+			RE::TESSoulGem* item = RE::TESForm::LookupByID<RE::TESSoulGem>(form_id);
+			if (item) {
+				return dynamic_cast<RE::BGSKeywordForm*>(item);
+			} else {
+				logger::warn(FMT_STRING("LookupKeywordForm couldn't lookup TESSoulGem with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			}
+			break;
+		} case RE::FormType::Weapon: {
+			RE::TESObjectWEAP* item = RE::TESForm::LookupByID<RE::TESObjectWEAP>(form_id);
+			if (item) {
+				return dynamic_cast<RE::BGSKeywordForm*>(item);
+			} else {
+				logger::warn(FMT_STRING("LookupKeywordForm couldn't lookup TESObjectWEAP with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			}
+			break;
+		} default:
+			logger::warn(FMT_STRING("LookupKeywordForm form cannot have keywords with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+	}
+}
+
+std::vector<const char*> GetKeywords(RE::FormID form_id, RE::FormType form_type) {
+	std::vector<const char*> keywords;
+
+	RE::BGSKeywordForm* keyword_form = LookupKeywordForm(form_id, form_type);
+
+	if (!keyword_form) {
+		logger::warn(FMT_STRING("GetKeywords form {:x} type: {:x} is not a keyword form"), (uint32_t)form_id, (uint32_t)form_type);
+		return keywords;
+	}
+
+	logger::info(FMT_STRING("GetKeywords GetNumKeywords: {:d}"), keyword_form->GetNumKeywords());
+	for (int i = 0; i != keyword_form->GetNumKeywords(); i++) {
+		std::optional<RE::BGSKeyword*> maybe_keyword = keyword_form->GetKeywordAt(i);
+		logger::info(FMT_STRING("GetKeywords keyword {:d} has_value: {:d}"), i, maybe_keyword.has_value());
+		if (maybe_keyword.has_value()) {
+			RE::BGSKeyword* keyword = dynamic_cast<RE::BGSKeyword*>(maybe_keyword.value());
+			if (keyword != nullptr) {
+				logger::info(FMT_STRING("GetKeywords keyword formId: {:x} editorFormId: {}"), (uint32_t)keyword->GetFormID(), keyword->GetFormEditorID());
+				keywords.push_back(keyword->GetFormEditorID());
+			} else {
+				logger::warn(FMT_STRING("GetKeywords ignoring invalid keyword {:x}"), (uintptr_t)keyword);
+			}
+		}
+	}
+	return keywords;
+}
+
 void CreateMerchandiseListImpl(
 	RE::BSFixedString api_url,
 	RE::BSFixedString api_key,
@@ -866,6 +982,7 @@ void CreateMerchandiseListImpl(
 	logger::info("Entered CreateMerchandiseListImpl");
 	RE::TESDataHandler* data_handler = RE::TESDataHandler::GetSingleton();
 	std::vector<RawMerchandise> merch_records;
+	std::vector<std::vector<const char*>> keyword_strings;
 
 	if (!merchant_chest) {
 		logger::error("CreateMerchandiseListImpl merchant_chest is null!");
@@ -903,12 +1020,22 @@ void CreateMerchandiseListImpl(
 			std::pair<uint32_t, const char*> id_parts = get_local_form_id_and_mod_name(base);
 			uint32_t local_form_id = id_parts.first;
 			const char* mod_name = id_parts.second;
-			logger::info(FMT_STRING("CreateMerchandiseList base form file_name: {}, local_form_id"), mod_name, local_form_id);
+			logger::info(FMT_STRING("CreateMerchandiseList base form file_name: {}, local_form_id: {:x}"), mod_name, local_form_id);
+
+			std::vector<const char*> keywords = GetKeywords(form_id, base->GetFormType());
 
 			// TODO: implement is_food
 			bool is_food = false;
 			// TODO: allow user to set price
 			uint32_t price = base->GetGoldValue();
+			const char** keywords_ptr = nullptr;
+			uintptr_t keywords_len = keywords.size();
+
+			if (keywords_len > 0) {
+				// Pushing to another vector to keep the strings allocated beyond the scope of this loop
+				keyword_strings.push_back(keywords);
+				keywords_ptr = &keyword_strings[keyword_strings.size() - 1][0];
+			}
 
 			merch_records.push_back({
 				mod_name,
@@ -918,6 +1045,8 @@ void CreateMerchandiseListImpl(
 				form_type,
 				is_food,
 				price,
+				keywords_ptr,
+				keywords_len,
 			});
 		} else {
 			logger::warn("CreateMerchandiseList skipping inventory entry which has no base form!");
