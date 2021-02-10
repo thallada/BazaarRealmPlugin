@@ -1,5 +1,6 @@
 #include "bindings.h"
 #include "utils.h"
+#include "BRMerchandiseList.h"
 
 void CreateTransactionImpl(
 	RE::BSFixedString api_url,
@@ -46,8 +47,9 @@ void CreateTransactionImpl(
 	// if (extra_quantity_price) {
 		// price = extra_quantity_price->pad14;
 	// }
+	std::vector<const char*> keywords = GetKeywords(form_id, merch_base->GetFormType());
 
-	RawTransaction input_transaction = { 0, shop_id, mod_name, local_form_id, name, form_type, is_food, price, is_sell, quantity, amount };
+	RawTransaction input_transaction = { 0, shop_id, mod_name, local_form_id, name, form_type, is_food, price, is_sell, quantity, amount, &keywords[0], keywords.size() };
 	FFIResult<RawTransaction> result = create_transaction(api_url.c_str(), api_key.c_str(), input_transaction);
 	if (result.IsOk()) {
 		RawTransaction saved_transaction = result.AsOk();

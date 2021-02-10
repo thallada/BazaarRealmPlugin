@@ -941,6 +941,7 @@ RE::BGSKeywordForm* LookupKeywordForm(RE::FormID form_id, RE::FormType form_type
 			break;
 		} default:
 			logger::warn(FMT_STRING("LookupKeywordForm form cannot have keywords with form_id: {:x} and form_type: {:x}"), (uint32_t)form_id, (uint32_t)form_type);
+			return nullptr;
 	}
 }
 
@@ -949,7 +950,7 @@ std::vector<const char*> GetKeywords(RE::FormID form_id, RE::FormType form_type)
 
 	RE::BGSKeywordForm* keyword_form = LookupKeywordForm(form_id, form_type);
 
-	if (!keyword_form) {
+	if (keyword_form == nullptr) {
 		logger::warn(FMT_STRING("GetKeywords form {:x} type: {:x} is not a keyword form"), (uint32_t)form_id, (uint32_t)form_type);
 		return keywords;
 	}
