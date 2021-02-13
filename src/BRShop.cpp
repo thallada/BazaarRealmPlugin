@@ -22,16 +22,16 @@ void CreateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BS
 		std::vector<RE::BGSKeyword*> keyword_forms;
 		for (int i = 0; i < shop.vendor_keywords_len; i++) {
 			RE::BSFixedString keyword = shop.vendor_keywords[i];
-			logger::info(FMT_STRING("GetShop keyword {:d}: {}"), i, keyword);
+			logger::info(FMT_STRING("CreateShop keyword {:d}: {}"), i, keyword);
 
 			RE::TESForm* form = RE::TESForm::LookupByEditorID(keyword);
 			if (!form) { // form is not found, might be in an uninstalled mod
-				logger::warn(FMT_STRING("GetShop could not find keyword form for: {}"), keyword);
+				logger::warn(FMT_STRING("CreateShop could not find keyword form for: {}"), keyword);
 				continue;
 			}
 			RE::BGSKeyword* keyword_form = static_cast<RE::BGSKeyword*>(form);
 			if (!keyword_form) {
-				logger::warn(FMT_STRING("GetShop could cast form to keyword with id {:x} for: {}"), (uint32_t)form->GetFormID(), keyword);
+				logger::warn(FMT_STRING("CreateShop could cast form to keyword with id {:x} for: {}"), (uint32_t)form->GetFormID(), keyword);
 				continue;
 			}
 			keyword_forms.push_back(keyword_form);
@@ -95,16 +95,16 @@ void UpdateShopImpl(
 		std::vector<RE::BGSKeyword*> keyword_forms;
 		for (int i = 0; i < shop.vendor_keywords_len; i++) {
 			RE::BSFixedString keyword = shop.vendor_keywords[i];
-			logger::info(FMT_STRING("GetShop keyword {:d}: {}"), i, keyword);
+			logger::info(FMT_STRING("UpdateShop keyword {:d}: {}"), i, keyword);
 
 			RE::TESForm* form = RE::TESForm::LookupByEditorID(keyword);
 			if (!form) { // form is not found, might be in an uninstalled mod
-				logger::warn(FMT_STRING("GetShop could not find keyword form for: {}"), keyword);
+				logger::warn(FMT_STRING("UpdateShop could not find keyword form for: {}"), keyword);
 				continue;
 			}
 			RE::BGSKeyword* keyword_form = static_cast<RE::BGSKeyword*>(form);
 			if (!keyword_form) {
-				logger::warn(FMT_STRING("GetShop could cast form to keyword with id {:x} for: {}"), (uint32_t)form->GetFormID(), keyword);
+				logger::warn(FMT_STRING("UpdateShop could cast form to keyword with id {:x} for: {}"), (uint32_t)form->GetFormID(), keyword);
 				continue;
 			}
 			keyword_forms.push_back(keyword_form);
