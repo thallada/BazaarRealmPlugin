@@ -307,7 +307,6 @@ void FillShelf(
 	std::tuple modifiers = CalculatePriceModifiers();
 	float price_factor = std::get<0>(modifiers);
 	float buy_price_modifier = std::get<1>(modifiers);
-	float sell_price_modifier = std::get<2>(modifiers);
 
 	RE::NiPoint3 shelf_position = merchant_shelf->data.location;
 	RE::NiPoint3 shelf_angle = merchant_shelf->data.angle;
@@ -981,7 +980,6 @@ void CreateMerchandiseListImpl(
 	RE::TESObjectREFR* merchant_chest
 ) {	
 	logger::info("Entered CreateMerchandiseListImpl");
-	RE::TESDataHandler* data_handler = RE::TESDataHandler::GetSingleton();
 	std::vector<RawMerchandise> merch_records;
 	std::vector<std::vector<const char*>> keyword_strings;
 
@@ -1015,6 +1013,10 @@ void CreateMerchandiseListImpl(
 			uint32_t form_type = (uint32_t)base->GetFormType();
 			uint32_t quantity = entry_data->countDelta;
 			RE::FormID form_id = base->GetFormID();
+			if (form_id == 15) { // gold
+				logger::info("CreateMerchandiseList ignoring gold in merchant chest");
+				continue;
+			}
 			logger::info(FMT_STRING("CreateMerchandiseList quantity: {:d}"), quantity);
 			logger::info(FMT_STRING("CreateMerchandiseList base form_id: {:x}, name: {}, type: {:x}"), (uint32_t)form_id, name, (uint32_t)form_type);
 

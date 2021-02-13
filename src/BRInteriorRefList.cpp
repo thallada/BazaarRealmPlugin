@@ -286,9 +286,6 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 		RE::BGSKeyword* toggle_keyword = data_handler->LookupForm<RE::BGSKeyword>(KEYWORD_TOGGLE, MOD_NAME);
 		RE::BGSKeyword* next_keyword = data_handler->LookupForm<RE::BGSKeyword>(KEYWORD_NEXT, MOD_NAME);
 		RE::BGSKeyword* prev_keyword = data_handler->LookupForm<RE::BGSKeyword>(KEYWORD_PREV, MOD_NAME);
-		RE::BGSKeyword* vendor_item_armor_keyword = RE::TESForm::LookupByID<RE::BGSKeyword>(KEYWORD_VENDOR_ITEM_ARMOR);
-		RE::BGSListForm* vendor_items = data_handler->LookupForm<RE::BGSListForm>(FORM_LIST_VENDOR_ITEMS, MOD_NAME);
-		RE::TESFaction* vendor_services_faction = data_handler->LookupForm<RE::TESFaction>(FACTION_SERVICES_VENDOR, MOD_NAME);
 		
 		SKSE::RegistrationMap<bool, std::vector<RE::TESObjectREFR*>> successReg = SKSE::RegistrationMap<bool, std::vector<RE::TESObjectREFR*>>();
 		successReg.Register(quest, RE::BSFixedString("OnLoadInteriorRefListSuccess"));
@@ -462,11 +459,6 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 			}
 
 			// TODO: load shop vendor(s)
-
-			// TODO: load these values from shop config data
-			vendor_items->ClearData();
-			vendor_items->AddForm(vendor_item_armor_keyword);
-			vendor_services_faction->vendorData.vendorValues.notBuySell = false;
 		} else {
 			const char * error = result.AsErr();
 			logger::error(FMT_STRING("LoadInteriorRefList get_interior_ref_list error: {}"), error);
