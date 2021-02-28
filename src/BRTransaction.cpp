@@ -27,7 +27,7 @@ void CreateTransactionImpl(
 
 	SKSE::RegistrationMap<int, int, int> successReg = SKSE::RegistrationMap<int, int, int>();
 	successReg.Register(result_handler, RE::BSFixedString("OnCreateTransactionSuccess"));
-	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 	failReg.Register(result_handler, RE::BSFixedString("OnCreateTransactionFail"));
 
 	const char * name = merch_base->GetName();
@@ -56,9 +56,16 @@ void CreateTransactionImpl(
 		logger::info(FMT_STRING("CreateTransaction success: {}"), saved_transaction.id);
 		successReg.SendEvent(saved_transaction.id, saved_transaction.quantity, saved_transaction.amount);
 	} else {
-		const char* error = result.AsErr();
-		logger::error(FMT_STRING("CreateTransaction failure: {}"), error);
-		failReg.SendEvent(RE::BSFixedString(error));
+		FFIError error = result.AsErr();
+		if (error.IsServer()) {
+			FFIServerError server_error = error.AsServer();
+			logger::error(FMT_STRING("CreateTransaction server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+			failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+		} else {
+			const char* network_error = error.AsNetwork();
+			logger::error(FMT_STRING("CreateTransaction network error: {}"), network_error);
+			failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+		}
 	}
 	successReg.Unregister(result_handler);
 	failReg.Unregister(result_handler);

@@ -11,7 +11,7 @@ void CreateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BS
 	SKSE::RegistrationMap<int, RE::BSFixedString, RE::BSFixedString, int, RE::BSFixedString, std::vector<RE::BGSKeyword*>, bool> successReg =
 		SKSE::RegistrationMap<int, RE::BSFixedString, RE::BSFixedString, int, RE::BSFixedString, std::vector<RE::BGSKeyword*>, bool>();
 	successReg.Register(quest, RE::BSFixedString("OnCreateShopSuccess"));
-	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 	failReg.Register(quest, RE::BSFixedString("OnCreateShopFail"));
 
 	logger::info(FMT_STRING("CreateShop api_url: {}, api_key: {}, name: {}, description: {}"), api_url, api_key, name, description);
@@ -38,9 +38,16 @@ void CreateShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::BS
 		}
 		successReg.SendEvent(shop.id, RE::BSFixedString(shop.name), RE::BSFixedString(shop.description), shop.gold, RE::BSFixedString(shop.shop_type), keyword_forms, shop.vendor_keywords_exclude);
 	} else {
-		const char* error = result.AsErr();
-		logger::error(FMT_STRING("CreateShop failure: {}"), error);
-		failReg.SendEvent(RE::BSFixedString(error));
+		FFIError error = result.AsErr();
+		if (error.IsServer()) {
+			FFIServerError server_error = error.AsServer();
+			logger::error(FMT_STRING("CreateShop server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+			failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+		} else {
+			const char* network_error = error.AsNetwork();
+			logger::error(FMT_STRING("CreateShop network error: {}"), network_error);
+			failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+		}
 	}
 	successReg.Unregister(quest);
 	failReg.Unregister(quest);
@@ -79,7 +86,7 @@ void UpdateShopImpl(
 	SKSE::RegistrationMap<int, RE::BSFixedString, RE::BSFixedString, int, RE::BSFixedString, std::vector<RE::BGSKeyword*>, bool> successReg =
 		SKSE::RegistrationMap<int, RE::BSFixedString, RE::BSFixedString, int, RE::BSFixedString, std::vector<RE::BGSKeyword*>, bool>();
 	successReg.Register(quest, RE::BSFixedString("OnUpdateShopSuccess"));
-	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 	failReg.Register(quest, RE::BSFixedString("OnUpdateShopFail"));
 
 	std::vector<const char*> keyword_strings;
@@ -111,9 +118,16 @@ void UpdateShopImpl(
 		}
 		successReg.SendEvent(shop.id, RE::BSFixedString(shop.name), RE::BSFixedString(shop.description), shop.gold, RE::BSFixedString(shop.shop_type), keyword_forms, shop.vendor_keywords_exclude);
 	} else {
-		const char* error = result.AsErr();
-		logger::error(FMT_STRING("UpdateShop failure: {}"), error);
-		failReg.SendEvent(RE::BSFixedString(error));
+		FFIError error = result.AsErr();
+		if (error.IsServer()) {
+			FFIServerError server_error = error.AsServer();
+			logger::error(FMT_STRING("UpdateShop server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+			failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+		} else {
+			const char* network_error = error.AsNetwork();
+			logger::error(FMT_STRING("UpdateShop network error: {}"), network_error);
+			failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+		}
 	}
 	successReg.Unregister(quest);
 	failReg.Unregister(quest);
@@ -153,7 +167,7 @@ void GetShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t i
 	SKSE::RegistrationMap<int, RE::BSFixedString, RE::BSFixedString, int, RE::BSFixedString, std::vector<RE::BGSKeyword*>, bool> successReg =
 		SKSE::RegistrationMap<int, RE::BSFixedString, RE::BSFixedString, int, RE::BSFixedString, std::vector<RE::BGSKeyword*>, bool>();
 	successReg.Register(quest, RE::BSFixedString("OnGetShopSuccess"));
-	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 	failReg.Register(quest, RE::BSFixedString("OnGetShopFail"));
 
 	logger::info(FMT_STRING("GetShop api_url: {}, api_key: {}, id: {}"), api_url, api_key, id);
@@ -180,9 +194,16 @@ void GetShopImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32_t i
 		}
 		successReg.SendEvent(shop.id, RE::BSFixedString(shop.name), RE::BSFixedString(shop.description), shop.gold, RE::BSFixedString(shop.shop_type), keyword_forms, shop.vendor_keywords_exclude);
 	} else {
-		const char* error = result.AsErr();
-		logger::error(FMT_STRING("GetShop failure: {}"), error);
-		failReg.SendEvent(RE::BSFixedString(error));
+		FFIError error = result.AsErr();
+		if (error.IsServer()) {
+			FFIServerError server_error = error.AsServer();
+			logger::error(FMT_STRING("GetShop server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+			failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+		} else {
+			const char* network_error = error.AsNetwork();
+			logger::error(FMT_STRING("GetShop network error: {}"), network_error);
+			failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+		}
 	}
 	successReg.Unregister(quest);
 	failReg.Unregister(quest);
@@ -211,7 +232,7 @@ void ListShopsImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::TES
 	SKSE::RegistrationMap<std::vector<int>, std::vector<RE::BSFixedString>, std::vector<RE::BSFixedString>, std::vector<int>, std::vector<RE::BSFixedString>, std::vector<RE::BGSKeyword*>, std::vector<bool>> successReg =
 		SKSE::RegistrationMap<std::vector<int>, std::vector<RE::BSFixedString>, std::vector<RE::BSFixedString>, std::vector<int>, std::vector<RE::BSFixedString>, std::vector<RE::BGSKeyword*>, std::vector<bool>>();
 	successReg.Register(quest, RE::BSFixedString("OnListShopsSuccess"));
-	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 	failReg.Register(quest, RE::BSFixedString("OnListShopsFail"));
 
 	logger::info(FMT_STRING("ListShops api_url: {}, api_key: {}"), api_url, api_key);
@@ -259,9 +280,16 @@ void ListShopsImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::TES
 		}
 		successReg.SendEvent(id_vec, name_vec, description_vec, gold_vec, shop_type_vec, keywords_vec, keywords_exclude_vec);
 	} else {
-		const char* error = result.AsErr();
-		logger::error(FMT_STRING("ListShops failure: {}"), error);
-		failReg.SendEvent(RE::BSFixedString(error));
+		FFIError error = result.AsErr();
+		if (error.IsServer()) {
+			FFIServerError server_error = error.AsServer();
+			logger::error(FMT_STRING("ListShops server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+			failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+		} else {
+			const char* network_error = error.AsNetwork();
+			logger::error(FMT_STRING("ListShops network error: {}"), network_error);
+			failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+		}
 	}
 	successReg.Unregister(quest);
 	failReg.Unregister(quest);
@@ -331,13 +359,13 @@ void RefreshShopGoldImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, i
 
 	SKSE::RegistrationMap<int> successReg = SKSE::RegistrationMap<int>();
 	successReg.Register(merchant_chest, RE::BSFixedString("OnRefreshShopGoldSuccess"));
-	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 	failReg.Register(merchant_chest, RE::BSFixedString("OnRefreshShopGoldFail"));
 
 	RE::TESForm* gold_form = RE::TESForm::LookupByID(15);
 	if (!gold_form) {
 		logger::error("RefreshShopGoldImpl failed to lookup gold form");
-		failReg.SendEvent(RE::BSFixedString("Failed to lookup gold form"));
+		failReg.SendEvent(false, 0, "", "", RE::BSFixedString("Failed to lookup gold form"));
 		successReg.Unregister(merchant_chest);
 		failReg.Unregister(merchant_chest);
 		return;
@@ -345,7 +373,7 @@ void RefreshShopGoldImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, i
 	RE::TESBoundObject* gold = static_cast<RE::TESBoundObject*>(gold_form);
 	if (!gold) {
 		logger::error("RefreshShopGoldImpl failed to cast gold form to gold bound object");
-		failReg.SendEvent(RE::BSFixedString("Failed to cast gold form to gold bound object"));
+		failReg.SendEvent(false, 0, "", "", RE::BSFixedString("Failed to cast gold form to gold bound object"));
 		successReg.Unregister(merchant_chest);
 		failReg.Unregister(merchant_chest);
 		return;
@@ -361,9 +389,16 @@ void RefreshShopGoldImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, i
 		}
 		successReg.SendEvent(shop.gold);
 	} else {
-		const char* error = result.AsErr();
-		logger::error(FMT_STRING("RefreshShopGold failure: {}"), error);
-		failReg.SendEvent(RE::BSFixedString(error));
+		FFIError error = result.AsErr();
+		if (error.IsServer()) {
+			FFIServerError server_error = error.AsServer();
+			logger::error(FMT_STRING("RefreshShopGold server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+			failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+		} else {
+			const char* network_error = error.AsNetwork();
+			logger::error(FMT_STRING("RefreshShopGold network error: {}"), network_error);
+			failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+		}
 	}
 	successReg.Unregister(merchant_chest);
 	failReg.Unregister(merchant_chest);

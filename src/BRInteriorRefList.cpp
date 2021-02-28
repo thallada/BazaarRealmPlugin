@@ -73,7 +73,7 @@ void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 
 	SKSE::RegistrationMap<int> successReg = SKSE::RegistrationMap<int>();
 	successReg.Register(quest, RE::BSFixedString("OnCreateInteriorRefListSuccess"));
-	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 	failReg.Register(quest, RE::BSFixedString("OnCreateInteriorRefListFail"));
 
 	// TODO: may need to dynamically pass shop cell into this function
@@ -81,7 +81,7 @@ void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 	logger::info(FMT_STRING("CreateInteriorRefListImpl lookup cell override name: {} id: {:x}"), cell->GetName(), (uint32_t)cell->GetFormID());
 	if (!cell) {
 		logger::error("CreateInteriorRefListImpl cell is null!");
-		failReg.SendEvent("Could not find Cell with the editor ID: BREmpty");
+		failReg.SendEvent(false, 0, "", "", "Could not find Cell with the editor ID: BREmpty");
 		successReg.Unregister(quest);
 		failReg.Unregister(quest);
 		return;
@@ -198,9 +198,16 @@ void CreateInteriorRefListImpl(RE::BSFixedString api_url, RE::BSFixedString api_
 		logger::info(FMT_STRING("CreateInteriorRefList success: {}"), interior_ref_list_id);
 		successReg.SendEvent(interior_ref_list_id);
 	} else {
-		const char* error = result.AsErr();
-		logger::error(FMT_STRING("CreateInteriorRefList failure: {}"), error);
-		failReg.SendEvent(RE::BSFixedString(error));
+		FFIError error = result.AsErr();
+		if (error.IsServer()) {
+			FFIServerError server_error = error.AsServer();
+			logger::error(FMT_STRING("CreateInteriorRefList server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+			failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+		} else {
+			const char* network_error = error.AsNetwork();
+			logger::error(FMT_STRING("CreateInteriorRefList network error: {}"), network_error);
+			failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+		}
 	}
 	successReg.Unregister(quest);
 	failReg.Unregister(quest);
@@ -289,26 +296,26 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 		
 		SKSE::RegistrationMap<bool, std::vector<RE::TESObjectREFR*>> successReg = SKSE::RegistrationMap<bool, std::vector<RE::TESObjectREFR*>>();
 		successReg.Register(quest, RE::BSFixedString("OnLoadInteriorRefListSuccess"));
-		SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+		SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 		failReg.Register(quest, RE::BSFixedString("OnLoadInteriorRefListFail"));
 
 		if (!target_ref) {
 			logger::error("LoadRefsTask target_ref is null!");
-			failReg.SendEvent("Spawn target reference is null");
+			failReg.SendEvent(false, 0, "", "", "Spawn target reference is null");
 			successReg.Unregister(quest);
 			failReg.Unregister(quest);
 			return;
 		}
 		if (!private_chest) {
 			logger::error("LoadRefsTask private_chest is null!");
-			failReg.SendEvent("Private merchant chest reference is null");
+			failReg.SendEvent(false, 0, "", "", "Private merchant chest reference is null");
 			successReg.Unregister(quest);
 			failReg.Unregister(quest);
 			return;
 		}
 		if (!public_chest) {
 			logger::error("LoadRefsTask public_chest is null!");
-			failReg.SendEvent("Public merchant chest reference is null");
+			failReg.SendEvent(false, 0, "", "", "Public merchant chest reference is null");
 			successReg.Unregister(quest);
 			failReg.Unregister(quest);
 			return;
@@ -318,7 +325,7 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 		logger::info(FMT_STRING("LoadRefsImpl lookup cell override name: {} id: {:x}"), cell->GetName(), (uint32_t)cell->GetFormID());
 		if (!cell) {
 			logger::error("LoadRefsTask cell is null!");
-			failReg.SendEvent("Lookup failed for the shop Cell: BREmpty");
+			failReg.SendEvent(false, 0, "", "", "Lookup failed for the shop Cell: BREmpty");
 			successReg.Unregister(quest);
 			failReg.Unregister(quest);
 			return;
@@ -365,7 +372,7 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 					game_ref = PlaceAtMe_Native(a_vm, 0, target_ref, form, 1, false, false);
 					if (!game_ref) {
 						logger::error("LoadInteriorRefList failed to place new ref in cell!");
-						failReg.SendEvent("Failed to place a new ref into the cell");
+						failReg.SendEvent(false, 0, "", "", "Failed to place a new ref into the cell");
 						successReg.Unregister(quest);
 						failReg.Unregister(quest);
 						return;
@@ -390,7 +397,7 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 					RE::TESForm* form = data_handler->LookupForm((*maybe_form_id).second, MOD_NAME);
 					if (!form) {
 						logger::error("LoadInteriorRefList failed to find shelf base form!");
-						failReg.SendEvent("Failed to place a shelf into the cell, could not find shelf base form");
+						failReg.SendEvent(false, 0, "", "", "Failed to place a shelf into the cell, could not find shelf base form");
 						successReg.Unregister(quest);
 						failReg.Unregister(quest);
 						return;
@@ -420,7 +427,7 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 							RE::TESForm* button_form = data_handler->LookupForm(button.form_id, MOD_NAME);
 							if (!button_form) {
 								logger::error("LoadInteriorRefList failed to find shelf button base form!");
-								failReg.SendEvent("Failed to place a shelf button into the cell, could not find shelf button base form");
+								failReg.SendEvent(false, 0, "", "", "Failed to place a shelf button into the cell, could not find shelf button base form");
 								successReg.Unregister(quest);
 								failReg.Unregister(quest);
 								return;
@@ -451,7 +458,7 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 					}
 				} else {
 					logger::error("LoadInteriorRefList unrecognized shelf type!");
-					failReg.SendEvent(fmt::format(FMT_STRING("Failed to place a shelf into the cell, unrecognized shelf_type: {}"), shelf.shelf_type));
+					failReg.SendEvent(false, 0, "", "", fmt::format(FMT_STRING("Failed to place a shelf into the cell, unrecognized shelf_type: {}"), shelf.shelf_type));
 					successReg.Unregister(quest);
 					failReg.Unregister(quest);
 					return;
@@ -460,9 +467,16 @@ void LoadRefsTask(FFIResult<RawInteriorRefData> result, RE::TESObjectREFR* targe
 
 			// TODO: load shop vendor(s)
 		} else {
-			const char * error = result.AsErr();
-			logger::error(FMT_STRING("LoadInteriorRefList get_interior_ref_list error: {}"), error);
-			failReg.SendEvent(RE::BSFixedString(error));
+			FFIError error = result.AsErr();
+			if (error.IsServer()) {
+				FFIServerError server_error = error.AsServer();
+				logger::error(FMT_STRING("LoadInteriorRefList server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+				failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+			} else {
+				const char* network_error = error.AsNetwork();
+				logger::error(FMT_STRING("LoadInteriorRefList network error: {}"), network_error);
+				failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+			}
 			successReg.Unregister(quest);
 			failReg.Unregister(quest);
 			return;

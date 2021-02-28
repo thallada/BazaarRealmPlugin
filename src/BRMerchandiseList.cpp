@@ -237,7 +237,7 @@ void FillShelf(
 	RE::TESObjectREFR* merchant_chest,
 	int page,
 	SKSE::RegistrationMap<bool> successReg,
-	SKSE::RegistrationMap<RE::BSFixedString> failReg
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg
 ) {
 	RE::TESDataHandler* data_handler = RE::TESDataHandler::GetSingleton();
 	RE::BSScript::Internal::VirtualMachine * a_vm = RE::BSScript::Internal::VirtualMachine::GetSingleton();
@@ -426,7 +426,7 @@ void FillShelf(
 	RE::TESObjectREFR* next_ref = merchant_shelf->GetLinkedRef(next_keyword);
 	if (!next_ref) {
 		logger::error("FillShelf next_ref is null!");
-		failReg.SendEvent("Could not find the shelf's next button");
+		failReg.SendEvent(false, 0, "", "", "Could not find the shelf's next button");
 		successReg.Unregister(merchant_chest);
 		failReg.Unregister(merchant_chest);
 		return;
@@ -434,7 +434,7 @@ void FillShelf(
 	RE::TESObjectREFR* prev_ref = merchant_shelf->GetLinkedRef(prev_keyword);
 	if (!prev_ref) {
 		logger::error("FillShelf prev_ref is null!");
-		failReg.SendEvent("Could not find the shelf's previous button");
+		failReg.SendEvent(false, 0, "", "", "Could not find the shelf's previous button");
 		successReg.Unregister(merchant_chest);
 		failReg.Unregister(merchant_chest);
 		return;
@@ -474,12 +474,12 @@ void LoadShelfPageTask(
 		// Since this method is running asyncronously in a thread, set up a callback on the trigger ref that will receive an event with the result
 		SKSE::RegistrationMap<bool> successReg = SKSE::RegistrationMap<bool>();
 		successReg.Register(merchant_chest, RE::BSFixedString("OnLoadShelfPageSuccess"));
-		SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+		SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 		failReg.Register(merchant_chest, RE::BSFixedString("OnLoadShelfPageFail"));
 
 		if (!ClearMerchandise(merchant_shelf)) {
 			logger::error("LoadShelfPageTask ClearMerchandise returned a fail code");
-			failReg.SendEvent(RE::BSFixedString("Failed to clear existing merchandise from shelf"));
+			failReg.SendEvent(false, 0, "", "", RE::BSFixedString("Failed to clear existing merchandise from shelf"));
 			successReg.Unregister(merchant_chest);
 			failReg.Unregister(merchant_chest);
 			return;
@@ -498,11 +498,11 @@ void FillShelves(
 	std::vector<RE::TESObjectREFR*> merchant_shelves,
 	RE::TESObjectREFR* merchant_chest,
 	SKSE::RegistrationMap<bool> successReg,
-	SKSE::RegistrationMap<RE::BSFixedString> failReg
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg
 ) {
 	if (!ClearAllMerchandise(cell)) {
 		logger::error("FillShelves ClearAllMerchandise returned a fail code");
-		failReg.SendEvent(RE::BSFixedString("Failed to clear existing merchandise from shelves"));
+		failReg.SendEvent(false, 0, "", "", RE::BSFixedString("Failed to clear existing merchandise from shelves"));
 		successReg.Unregister(merchant_chest);
 		failReg.Unregister(merchant_chest);
 		return;
@@ -533,7 +533,7 @@ void LoadMerchTask(
 		// Since this method is running asyncronously in a thread, set up a callback on the trigger ref that will receive an event with the result
 		SKSE::RegistrationMap<bool> successReg = SKSE::RegistrationMap<bool>();
 		successReg.Register(merchant_chest, RE::BSFixedString("OnLoadMerchandiseSuccess"));
-		SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+		SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 		failReg.Register(merchant_chest, RE::BSFixedString("OnLoadMerchandiseFail"));
 
 		if (result.IsOk()) {
@@ -563,9 +563,16 @@ void LoadMerchTask(
 
 			FillShelves(cell, merchant_shelves, merchant_chest, successReg, failReg);
 		} else {
-			const char* error = result.AsErr();
-			logger::error(FMT_STRING("LoadMerchTask get_merchandise_list error: {}"), error);
-			failReg.SendEvent(RE::BSFixedString(error));
+			FFIError error = result.AsErr();
+			if (error.IsServer()) {
+				FFIServerError server_error = error.AsServer();
+				logger::error(FMT_STRING("LoadMerchTask server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+				failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+			} else {
+				const char* network_error = error.AsNetwork();
+				logger::error(FMT_STRING("LoadMerchTask network error: {}"), network_error);
+				failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+			}
 			successReg.Unregister(merchant_chest);
 			failReg.Unregister(merchant_chest);
 			return;
@@ -990,7 +997,7 @@ void CreateMerchandiseListImpl(
 
 	SKSE::RegistrationMap<bool> successReg = SKSE::RegistrationMap<bool>();
 	successReg.Register(merchant_chest, RE::BSFixedString("OnCreateMerchandiseSuccess"));
-	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 	failReg.Register(merchant_chest, RE::BSFixedString("OnCreateMerchandiseFail"));
 
 	RE::InventoryChanges* inventory_changes = merchant_chest->GetInventoryChanges();
@@ -1073,9 +1080,16 @@ void CreateMerchandiseListImpl(
 		logger::info("CreateMerchandiseList success");
 		successReg.SendEvent(true);
 	} else {
-		const char* error = result.AsErr();
-		logger::error(FMT_STRING("CreateMerchandiseList failure: {}"), error);
-		failReg.SendEvent(RE::BSFixedString(error));
+		FFIError error = result.AsErr();
+		if (error.IsServer()) {
+			FFIServerError server_error = error.AsServer();
+			logger::error(FMT_STRING("CreateMerchandiseList server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+			failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+		} else {
+			const char* network_error = error.AsNetwork();
+			logger::error(FMT_STRING("CreateMerchandiseList network error: {}"), network_error);
+			failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+		}
 	}
 	successReg.Unregister(merchant_chest);
 	failReg.Unregister(merchant_chest);

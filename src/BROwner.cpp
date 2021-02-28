@@ -9,7 +9,7 @@ void CreateOwnerImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::B
 
 	SKSE::RegistrationMap<int> successReg = SKSE::RegistrationMap<int>();
 	successReg.Register(quest, RE::BSFixedString("OnCreateOwnerSuccess"));
-	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 	failReg.Register(quest, RE::BSFixedString("OnCreateOwnerFail"));
 
 	logger::info(FMT_STRING("CreateOwner api_url: {}, api_key: {}, name: {}, mod_version: {}"), api_url, api_key, name, mod_version);
@@ -19,9 +19,16 @@ void CreateOwnerImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, RE::B
 		logger::info(FMT_STRING("CreateOwner success: {}"), owner.id);
 		successReg.SendEvent(owner.id);
 	} else {
-		RE::BSFixedString error = result.AsErr();
-		logger::info(FMT_STRING("CreateOwner failure: {}"), error);
-		failReg.SendEvent(error);
+		FFIError error = result.AsErr();
+		if (error.IsServer()) {
+			FFIServerError server_error = error.AsServer();
+			logger::error(FMT_STRING("CreateOwner server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+			failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+		} else {
+			const char* network_error = error.AsNetwork();
+			logger::error(FMT_STRING("CreateOwner network error: {}"), network_error);
+			failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+		}
 	}
 	successReg.Unregister(quest);
 	failReg.Unregister(quest);
@@ -48,7 +55,7 @@ void UpdateOwnerImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32
 
 	SKSE::RegistrationMap<int> successReg = SKSE::RegistrationMap<int>();
 	successReg.Register(quest, RE::BSFixedString("OnUpdateOwnerSuccess"));
-	SKSE::RegistrationMap<RE::BSFixedString> failReg = SKSE::RegistrationMap<RE::BSFixedString>();
+	SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString> failReg = SKSE::RegistrationMap<bool, int, RE::BSFixedString, RE::BSFixedString, RE::BSFixedString>();
 	failReg.Register(quest, RE::BSFixedString("OnUpdateOwnerFail"));
 
 	logger::info(FMT_STRING("UpdateOwner api_url: {}, api_key: {}, name: {}, mod_version: {}"), api_url, api_key, name, mod_version);
@@ -58,9 +65,16 @@ void UpdateOwnerImpl(RE::BSFixedString api_url, RE::BSFixedString api_key, int32
 		logger::info(FMT_STRING("UpdateOwner success: {}"), owner.id);
 		successReg.SendEvent(owner.id);
 	} else {
-		RE::BSFixedString error = result.AsErr();
-		logger::info(FMT_STRING("UpdateOwner failure: {}"), error);
-		failReg.SendEvent(error);
+		FFIError error = result.AsErr();
+		if (error.IsServer()) {
+			FFIServerError server_error = error.AsServer();
+			logger::error(FMT_STRING("UpdateOwner server error: {} {} {}"), server_error.status, server_error.title, server_error.detail);
+			failReg.SendEvent(true, server_error.status, RE::BSFixedString(server_error.title), RE::BSFixedString(server_error.detail), RE::BSFixedString());
+		} else {
+			const char* network_error = error.AsNetwork();
+			logger::error(FMT_STRING("UpdateOwner network error: {}"), network_error);
+			failReg.SendEvent(false, 0, RE::BSFixedString(), RE::BSFixedString(), RE::BSFixedString(network_error));
+		}
 	}
 	successReg.Unregister(quest);
 	failReg.Unregister(quest);
